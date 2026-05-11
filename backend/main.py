@@ -6,12 +6,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.market import router as market_router
 from routes.news import router as news_router
 from routes.watchlist import router as watchlist_router
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Scheduler and aggregator started in Task 8
+    import asyncio
+    from aggregator_loop import run_market_refresh, run_news_refresh
+
+    async def market_loop():
+        while True:
+            try:
+                run_market_refresh()
+            except Exception as e:
+                logger.error(f"Market refresh error: {e}")
+            await asyncio.sleep(900)  # 15 minutes
+
+    async def news_loop():
+        while True:
+            try:
+                run_news_refresh()
+            except Exception as e:
+                logger.error(f"News refresh error: {e}")
+            await asyncio.sleep(1800)  # 30 minutes
+
+    asyncio.create_task(market_loop())
+    asyncio.create_task(news_loop())
     yield
 
 app = FastAPI(title="Trading Dashboard API", lifespan=lifespan)
