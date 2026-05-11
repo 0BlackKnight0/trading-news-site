@@ -9,6 +9,8 @@ except Exception:
     NSE_AVAILABLE = False
 
 CRYPTO_IDS = "bitcoin,ethereum,solana,binancecoin,ripple,cardano,polkadot,dogecoin,avalanche-2,chainlink"
+CRYPTO_LIMIT = 10
+HTTP_TIMEOUT = 10
 FOREX_PAIRS = {
     "USD/INR": "USDINR=X",
     "EUR/USD": "EURUSD=X",
@@ -50,20 +52,23 @@ def fetch_india() -> list[dict]:
 def fetch_crypto() -> list[dict]:
     url = (
         "https://api.coingecko.com/api/v3/coins/markets"
-        f"?vs_currency=usd&ids={CRYPTO_IDS}&order=market_cap_desc&per_page=10&page=1"
+        f"?vs_currency=usd&ids={CRYPTO_IDS}&order=market_cap_desc&per_page={CRYPTO_LIMIT}&page=1"
     )
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=HTTP_TIMEOUT)
         items = resp.json()
-        return [
-            {
-                "symbol": item["symbol"].upper(),
-                "price": item["current_price"],
-                "change_pct": round(item.get("price_change_percentage_24h", 0), 2),
-                "category": "crypto",
-            }
-            for item in items
-        ]
+        results = []
+        for item in items:
+            try:
+                results.append({
+                    "symbol": item["symbol"].upper(),
+                    "price": item["current_price"],
+                    "change_pct": round(item.get("price_change_percentage_24h", 0), 2),
+                    "category": "crypto",
+                })
+            except Exception:
+                pass
+        return results
     except Exception:
         return []
 
@@ -74,8 +79,8 @@ def fetch_forex() -> list[dict]:
         try:
             ticker = yf.Ticker(ticker_symbol)
             info = ticker.info
-            price = info.get("regularMarketPrice", 0)
-            change_pct = info.get("regularMarketChangePercent", 0)
+            price = info.get("regularMarketPrice") or 0
+            change_pct = info.get("regularMarketChangePercent") or 0
             results.append({
                 "symbol": display_symbol,
                 "price": round(price, 4),
