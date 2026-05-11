@@ -1,14 +1,19 @@
 # backend/database.py
 import os
+import logging
 from supabase import create_client, Client
+
+logger = logging.getLogger(__name__)
 
 _client: Client | None = None
 
 def get_client() -> Client:
     global _client
     if _client is None:
-        url = os.environ["SUPABASE_URL"]
-        key = os.environ["SUPABASE_KEY"]
+        url = os.environ.get("SUPABASE_URL", "")
+        key = os.environ.get("SUPABASE_KEY", "")
+        if not url or not key:
+            raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set in environment")
         _client = create_client(url, key)
     return _client
 
@@ -25,10 +30,13 @@ def get_market() -> list[dict]:
     return res.data
 
 def insert_news(items: list[dict]):
-    existing = {r["title"] for r in get_client().table("news_cache").select("title").execute().data}
-    new_items = [i for i in items if i["title"] not in existing]
-    if new_items:
-        get_client().table("news_cache").insert(new_items).execute()
+    try:
+        existing = {r["title"] for r in get_client().table("news_cache").select("title").execute().data}
+        new_items = [i for i in items if i["title"] not in existing]
+        if new_items:
+            get_client().table("news_cache").insert(new_items).execute()
+    except Exception as e:
+        logger.error(f"insert_news failed: {e}")
 
 def get_news(category: str) -> list[dict]:
     res = (get_client().table("news_cache")
