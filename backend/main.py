@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.market import router as market_router
 from routes.news import router as news_router
 from routes.watchlist import router as watchlist_router
+from routes.admin import router as admin_router
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ app.add_middleware(
 app.include_router(market_router)
 app.include_router(news_router)
 app.include_router(watchlist_router)
+app.include_router(admin_router)
 
 @app.get("/health")
 def health():
