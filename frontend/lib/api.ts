@@ -14,7 +14,7 @@ export const api = {
   getNews: (category: "trading" | "tech" | "energy") =>
     fetchJSON<NewsItem[]>(`/news?category=${category}`),
   getWatchlist: () => fetchJSON<WatchlistItem[]>("/watchlist"),
-  addToWatchlist: (symbol: string, type: string) =>
+  addToWatchlist: (symbol: string, type: "stock" | "crypto" | "forex") =>
     fetchJSON<{ status: string }>("/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
