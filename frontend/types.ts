@@ -22,3 +22,7 @@ export interface WatchlistItem {
   type: "stock" | "crypto" | "forex";
   added_at: string;
 }
+
+// Derived utility types — use these instead of repeating the unions
+export type NewsCategory = NewsItem["category"];     // "trading" | "tech" | "energy"
+export type WatchlistType = WatchlistItem["type"];   // "stock" | "crypto" | "forex"

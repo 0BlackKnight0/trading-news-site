@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { NewsItem } from "@/types";
+import { NewsItem, NewsCategory } from "@/types";
 import { api } from "@/lib/api";
 import { useInterval } from "@/hooks/useInterval";
 import { NewsCard } from "./NewsCard";
 
-type Category = "trading" | "tech" | "energy";
+type Category = NewsCategory;
 
 const TABS: { key: Category; label: string }[] = [
   { key: "trading", label: "📈 Trading" },

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { WatchlistItem } from "@/types";
+import { WatchlistItem, WatchlistType } from "@/types";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ interface Props {
 
 export function WatchlistManager({ items, onUpdate }: Props) {
   const [symbol, setSymbol] = useState("");
-  const [type, setType] = useState<"stock" | "crypto" | "forex">("stock");
+  const [type, setType] = useState<WatchlistType>("stock");
   const [loading, setLoading] = useState(false);
 
   async function handleAdd() {
@@ -30,8 +30,12 @@ export function WatchlistManager({ items, onUpdate }: Props) {
   }
 
   async function handleRemove(sym: string) {
-    await api.removeFromWatchlist(sym);
-    onUpdate();
+    try {
+      await api.removeFromWatchlist(sym);
+      onUpdate();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   return (

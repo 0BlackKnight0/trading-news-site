@@ -6,6 +6,14 @@ import { useInterval } from "@/hooks/useInterval";
 import { PriceRow } from "./PriceRow";
 import { WatchlistManager } from "./WatchlistManager";
 
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 mb-1 px-2">
+      {label}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const [market, setMarket] = useState<MarketPrice[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -38,14 +46,6 @@ export function Sidebar() {
   const india = market.filter((m) => m.category === "india");
   const crypto = market.filter((m) => m.category === "crypto").slice(0, 6);
   const forex = market.filter((m) => m.category === "forex");
-
-  function SectionLabel({ label }: { label: string }) {
-    return (
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-4 mb-1 px-2">
-        {label}
-      </div>
-    );
-  }
 
   return (
     <aside className="w-52 shrink-0 bg-[#13151f] border-r border-slate-800 h-screen overflow-y-auto py-4 flex flex-col">

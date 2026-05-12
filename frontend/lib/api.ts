@@ -1,5 +1,5 @@
 // frontend/lib/api.ts
-import { MarketPrice, NewsItem, WatchlistItem } from "@/types";
+import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType } from "@/types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -11,10 +11,10 @@ async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   getMarket: () => fetchJSON<MarketPrice[]>("/market"),
-  getNews: (category: "trading" | "tech" | "energy") =>
+  getNews: (category: NewsCategory) =>
     fetchJSON<NewsItem[]>(`/news?category=${category}`),
   getWatchlist: () => fetchJSON<WatchlistItem[]>("/watchlist"),
-  addToWatchlist: (symbol: string, type: "stock" | "crypto" | "forex") =>
+  addToWatchlist: (symbol: string, type: WatchlistType) =>
     fetchJSON<{ status: string }>("/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
