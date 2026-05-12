@@ -5,14 +5,16 @@ from aggregator.news import fetch_news, parse_rss
 def test_parse_rss_returns_list_of_dicts():
     mock_feed = MagicMock()
     mock_entry = MagicMock()
-    mock_entry.title = "Test headline"
+    mock_entry.title = "Nifty falls 200 points as market sells off"
     mock_entry.link = "http://test.com"
     mock_entry.published_parsed = (2026, 5, 11, 8, 0, 0, 0, 0, 0)
+    mock_entry.summary = ""
+    mock_entry.description = ""
     mock_feed.entries = [mock_entry]
     with patch("aggregator.news.feedparser.parse", return_value=mock_feed):
         result = parse_rss("http://fake-rss.com", "trading", "TestSource")
     assert len(result) == 1
-    assert result[0]["title"] == "Test headline"
+    assert result[0]["title"] == "Nifty falls 200 points as market sells off"
     assert result[0]["category"] == "trading"
     assert result[0]["source"] == "TestSource"
 

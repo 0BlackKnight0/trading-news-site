@@ -4,7 +4,7 @@ export interface MarketPrice {
   symbol: string;
   price: number;
   change_pct: number;
-  category: "india" | "crypto" | "forex";
+  category: "india" | "crypto" | "forex" | "global";
 }
 
 export interface NewsItem {
@@ -14,6 +14,7 @@ export interface NewsItem {
   source: string;
   category: "trading" | "tech" | "energy";
   published_at: string | null;
+  summary?: string | null;
 }
 
 export interface WatchlistItem {

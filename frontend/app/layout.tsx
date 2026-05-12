@@ -1,19 +1,22 @@
 // frontend/app/layout.tsx
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
-  title: "Trading Dashboard",
+  title: "Market Intelligence",
   description: "Personal trading news and market data dashboard",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-[#0f1117] text-slate-200 antialiased`}>
+      <body className={`${dmSans.className} bg-[#0a0a0a] text-[#e5e5e5] antialiased`}>
         {children}
       </body>
     </html>

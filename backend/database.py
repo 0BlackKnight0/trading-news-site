@@ -33,8 +33,14 @@ def insert_news(items: list[dict]):
     try:
         existing = {r["title"] for r in get_client().table("news_cache").select("title").execute().data}
         new_items = [i for i in items if i["title"] not in existing]
-        if new_items:
+        if not new_items:
+            return
+        try:
             get_client().table("news_cache").insert(new_items).execute()
+        except Exception:
+            # Fall back without summary if column doesn't exist yet
+            stripped = [{k: v for k, v in item.items() if k != "summary"} for item in new_items]
+            get_client().table("news_cache").insert(stripped).execute()
     except Exception as e:
         logger.error(f"insert_news failed: {e}")
 

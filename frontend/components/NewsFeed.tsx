@@ -7,10 +7,27 @@ import { NewsCard } from "./NewsCard";
 
 type Category = NewsCategory;
 
-const TABS: { key: Category; label: string }[] = [
-  { key: "trading", label: "📈 Trading" },
-  { key: "tech", label: "🤖 AI & Tech" },
-  { key: "energy", label: "⚡ Energy" },
+const TABS: {
+  key: Category;
+  label: string;
+  activeClasses: string;
+  count?: number;
+}[] = [
+  {
+    key: "trading",
+    label: "📈 Trading",
+    activeClasses: "bg-[#ff5530] text-white border-[#ff5530]",
+  },
+  {
+    key: "tech",
+    label: "🤖 AI & Tech",
+    activeClasses: "bg-[#3b82f6] text-white border-[#3b82f6]",
+  },
+  {
+    key: "energy",
+    label: "⚡ Energy",
+    activeClasses: "bg-[#f97316] text-white border-[#f97316]",
+  },
 ];
 
 export function NewsFeed() {
@@ -20,6 +37,8 @@ export function NewsFeed() {
     tech: [],
     energy: [],
   });
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     const [trading, tech, energy] = await Promise.allSettled([
@@ -32,34 +51,95 @@ export function NewsFeed() {
       tech: tech.status === "fulfilled" ? tech.value : [],
       energy: energy.status === "fulfilled" ? energy.value : [],
     });
+    setLastUpdated(new Date());
+    setLoading(false);
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-  useInterval(fetchAll, 300_000); // refresh every 5 min
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
+  useInterval(fetchAll, 300_000);
+
+  const activeNews = news[activeTab];
 
   return (
-    <main className="flex-1 p-6 overflow-y-auto">
-      <div className="flex gap-2 mb-6">
-        {TABS.map((tab) => (
+    <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a]">
+      <div className="px-6 pt-5 pb-0 border-b border-[#191919]">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-[15px] font-semibold text-white tracking-tight">News Feed</h2>
+            <p className="text-[11px] text-[#333] mt-0.5">
+              {loading
+                ? "Fetching latest..."
+                : lastUpdated
+                ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · ${activeNews.length} articles`
+                : ""}
+            </p>
+          </div>
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              activeTab === tab.key
-                ? "bg-indigo-600 text-white"
-                : "bg-slate-800 text-slate-400 hover:bg-slate-700"
-            }`}
+            onClick={fetchAll}
+            className="text-[11px] text-[#444] hover:text-[#888] border border-[#1e1e1e] hover:border-[#2e2e2e] rounded-full px-3 py-1 transition-all"
           >
-            {tab.label}
+            Refresh
           </button>
-        ))}
+        </div>
+
+        <div className="flex gap-2 pb-0">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-1.5 rounded-full text-[12px] font-semibold border transition-all duration-150 ${
+                activeTab === tab.key
+                  ? tab.activeClasses
+                  : "bg-transparent text-[#555] border-[#1e1e1e] hover:border-[#2e2e2e] hover:text-[#888]"
+              }`}
+            >
+              {tab.label}
+              {news[tab.key].length > 0 && (
+                <span
+                  className={`ml-1.5 text-[10px] ${
+                    activeTab === tab.key ? "opacity-70" : "text-[#333]"
+                  }`}
+                >
+                  {news[tab.key].length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {news[activeTab].length === 0 ? (
-          <p className="text-slate-500 text-sm col-span-3">Loading news...</p>
+      <div className="flex-1 overflow-y-auto p-6 pt-5">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-[#111111] border border-[#1e1e1e] rounded-2xl p-4 animate-pulse"
+              >
+                <div className="flex justify-between mb-2.5">
+                  <div className="h-4 w-16 bg-[#1e1e1e] rounded-full" />
+                  <div className="h-4 w-10 bg-[#1e1e1e] rounded" />
+                </div>
+                <div className="h-4 bg-[#1e1e1e] rounded mb-1.5" />
+                <div className="h-4 bg-[#1e1e1e] rounded w-3/4 mb-1.5" />
+                <div className="h-3 bg-[#1a1a1a] rounded w-full mt-2" />
+                <div className="h-3 bg-[#1a1a1a] rounded w-2/3 mt-1" />
+                <div className="h-3 w-20 bg-[#1a1a1a] rounded mt-3" />
+              </div>
+            ))}
+          </div>
+        ) : activeNews.length === 0 ? (
+          <div className="flex items-center justify-center h-40">
+            <p className="text-[#333] text-sm">No articles yet — fetching...</p>
+          </div>
         ) : (
-          news[activeTab].map((item) => <NewsCard key={item.id} item={item} />)
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {activeNews.map((item) => (
+              <NewsCard key={item.id} item={item} />
+            ))}
+          </div>
         )}
       </div>
     </main>

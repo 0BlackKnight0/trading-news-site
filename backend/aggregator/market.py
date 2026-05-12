@@ -17,6 +17,13 @@ FOREX_PAIRS = {
     "GBP/USD": "GBPUSD=X",
     "EUR/INR": "EURINR=X",
 }
+GLOBAL_SYMBOLS = {
+    "S&P 500": "^GSPC",
+    "NASDAQ": "^IXIC",
+    "DOW": "^DJI",
+    "GOLD": "GC=F",
+    "OIL": "CL=F",
+}
 
 
 def fetch_india() -> list[dict]:
@@ -92,5 +99,24 @@ def fetch_forex() -> list[dict]:
     return results
 
 
+def fetch_global() -> list[dict]:
+    results = []
+    for display_symbol, ticker_symbol in GLOBAL_SYMBOLS.items():
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            info = ticker.info
+            price = info.get("regularMarketPrice") or 0
+            change_pct = info.get("regularMarketChangePercent") or 0
+            results.append({
+                "symbol": display_symbol,
+                "price": round(price, 2),
+                "change_pct": round(change_pct, 2),
+                "category": "global",
+            })
+        except Exception:
+            pass
+    return results
+
+
 def fetch_all() -> list[dict]:
-    return fetch_india() + fetch_crypto() + fetch_forex()
+    return fetch_india() + fetch_crypto() + fetch_forex() + fetch_global()
