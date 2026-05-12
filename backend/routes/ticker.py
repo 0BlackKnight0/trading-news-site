@@ -92,7 +92,17 @@ def ticker_detail(symbol: str, type: str = Query(default="stock")):
 
     if meta:
         price = float(meta.get("regularMarketPrice") or 0)
-        prev_close = float(meta.get("chartPreviousClose") or meta.get("previousClose") or 0)
+
+        # Extract OHLCV from chart indicators for accurate prev_close and open
+        quotes_data = (chart.get("indicators") or {}).get("quote") or [{}]
+        ohlcv = quotes_data[0] if quotes_data else {}
+        closes = [v for v in (ohlcv.get("close") or []) if v is not None]
+        opens  = [v for v in (ohlcv.get("open") or [])  if v is not None]
+
+        # Previous close = second-to-last available close (yesterday)
+        prev_close = float(closes[-2]) if len(closes) >= 2 else float(meta.get("chartPreviousClose") or 0)
+        open_price = float(opens[-1]) if opens else None
+
         change_abs = price - prev_close if prev_close else 0.0
         change_pct = (change_abs / prev_close * 100) if prev_close else 0.0
 
@@ -107,7 +117,7 @@ def ticker_detail(symbol: str, type: str = Query(default="stock")):
             "market_cap": meta.get("marketCap") or None,
             "week_52_high": meta.get("fiftyTwoWeekHigh") or None,
             "week_52_low": meta.get("fiftyTwoWeekLow") or None,
-            "open": meta.get("regularMarketOpen") or None,
+            "open": round(open_price, 4) if open_price else None,
         })
 
     result["news"] = _news(symbol)
