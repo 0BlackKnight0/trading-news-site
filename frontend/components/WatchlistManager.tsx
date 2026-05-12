@@ -42,7 +42,7 @@ export function WatchlistManager({ items, onUpdate }: Props) {
     <div>
       <div className="flex items-center gap-2 mb-2 px-3">
         <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] shrink-0" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#3a3a3a]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#555]">
           Watchlist
         </span>
       </div>

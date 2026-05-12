@@ -31,16 +31,28 @@ def get_market() -> list[dict]:
 
 def insert_news(items: list[dict]):
     try:
-        existing = {r["title"] for r in get_client().table("news_cache").select("title").execute().data}
-        new_items = [i for i in items if i["title"] not in existing]
-        if not new_items:
-            return
-        try:
-            get_client().table("news_cache").insert(new_items).execute()
-        except Exception:
-            # Fall back without summary if column doesn't exist yet
-            stripped = [{k: v for k, v in item.items() if k != "summary"} for item in new_items]
-            get_client().table("news_cache").insert(stripped).execute()
+        existing_rows = get_client().table("news_cache").select("title, summary").execute().data
+        existing_titles = {r["title"] for r in existing_rows}
+        needs_summary = {r["title"] for r in existing_rows if not r.get("summary")}
+
+        new_items = [i for i in items if i["title"] not in existing_titles]
+        if new_items:
+            try:
+                get_client().table("news_cache").insert(new_items).execute()
+            except Exception:
+                stripped = [{k: v for k, v in item.items() if k != "summary"} for item in new_items]
+                get_client().table("news_cache").insert(stripped).execute()
+
+        # Backfill summaries for existing articles that have none
+        for item in items:
+            if item.get("summary") and item["title"] in needs_summary:
+                try:
+                    (get_client().table("news_cache")
+                     .update({"summary": item["summary"]})
+                     .eq("title", item["title"])
+                     .execute())
+                except Exception:
+                    pass
     except Exception as e:
         logger.error(f"insert_news failed: {e}")
 

@@ -42,7 +42,7 @@ export function NewsCard({ item }: Props) {
         <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold ${config.badge}`}>
           {config.label}
         </span>
-        <span className="text-[10px] text-[#333]">{timeStr}</span>
+        <span className="text-[11px] text-[#555]">{timeStr}</span>
       </div>
 
       <h3 className="text-[13px] font-semibold text-[#d5d5d5] leading-[1.45] line-clamp-2 group-hover:text-white transition-colors">
@@ -50,14 +50,14 @@ export function NewsCard({ item }: Props) {
       </h3>
 
       {item.summary && item.summary !== item.title && (
-        <p className="text-[11px] text-[#555] leading-relaxed mt-1.5 line-clamp-3">
+        <p className="text-[12px] text-[#7a7a7a] leading-relaxed mt-1.5 line-clamp-3">
           {item.summary}
         </p>
       )}
 
       <div className="flex items-center gap-1.5 mt-3">
         <div className={`w-1 h-1 rounded-full shrink-0 ${config.dot}`} />
-        <span className="text-[10px] text-[#333] truncate">{item.source}</span>
+        <span className="text-[11px] text-[#555] truncate">{item.source}</span>
       </div>
     </a>
   );

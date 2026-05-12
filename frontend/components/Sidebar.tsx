@@ -18,7 +18,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 mt-5 mb-1 px-3">
       {dot && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
-      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#3a3a3a]">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#555]">
         {label}
       </span>
     </div>
@@ -66,7 +66,7 @@ export function Sidebar() {
           <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse" />
           <h1 className="text-[13px] font-semibold text-white tracking-tight">Market Intelligence</h1>
         </div>
-        <p className="text-[10px] text-[#333] mt-0.5 ml-3.5">Live · Auto-refreshes every 60s</p>
+        <p className="text-[10px] text-[#555] mt-0.5 ml-3.5">Live · Auto-refreshes every 60s</p>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
