@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
-import { WatchlistItem, WatchlistType } from "@/types";
+import { useState, useRef, useEffect } from "react";
+import { WatchlistItem, WatchlistType, SearchResult } from "@/types";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TickerModal } from "./TickerModal";
 
 interface Props {
   items: WatchlistItem[];
@@ -14,6 +15,57 @@ export function WatchlistManager({ items, onUpdate }: Props) {
   const [symbol, setSymbol] = useState("");
   const [type, setType] = useState<WatchlistType>("stock");
   const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<{ symbol: string; type: WatchlistType } | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Autocomplete search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!symbol.trim() || symbol.length < 1) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await api.searchTicker(symbol.trim());
+        setSuggestions(results);
+        setShowDropdown(results.length > 0);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  }, [symbol]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        inputRef.current && !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  function selectSuggestion(s: SearchResult) {
+    setSymbol(s.symbol);
+    setType(s.type);
+    setSuggestions([]);
+    setShowDropdown(false);
+    inputRef.current?.focus();
+  }
 
   async function handleAdd() {
     if (!symbol.trim()) return;
@@ -21,6 +73,8 @@ export function WatchlistManager({ items, onUpdate }: Props) {
     try {
       await api.addToWatchlist(symbol.trim().toUpperCase(), type);
       setSymbol("");
+      setSuggestions([]);
+      setShowDropdown(false);
       onUpdate();
     } catch (e) {
       console.error(e);
@@ -29,7 +83,8 @@ export function WatchlistManager({ items, onUpdate }: Props) {
     }
   }
 
-  async function handleRemove(sym: string) {
+  async function handleRemove(sym: string, e: React.MouseEvent) {
+    e.stopPropagation();
     try {
       await api.removeFromWatchlist(sym);
       onUpdate();
@@ -48,12 +103,18 @@ export function WatchlistManager({ items, onUpdate }: Props) {
       </div>
 
       {items.map((item) => (
-        <div key={item.id} className="flex items-center justify-between py-1.5 px-3 group hover:bg-white/[0.02]">
-          <span className="text-[11px] font-medium text-[#888]">{item.symbol}</span>
+        <div
+          key={item.id}
+          onClick={() => setSelected({ symbol: item.symbol, type: item.type })}
+          className="flex items-center justify-between py-1.5 px-3 group hover:bg-white/[0.03] cursor-pointer transition-colors"
+        >
+          <span className="text-[11px] font-medium text-[#888] group-hover:text-[#ccc] transition-colors">
+            {item.symbol}
+          </span>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] text-[#333]">{item.type}</span>
             <button
-              onClick={() => handleRemove(item.symbol)}
+              onClick={(e) => handleRemove(item.symbol, e)}
               className="text-[#2a2a2a] hover:text-[#ef4444] opacity-0 group-hover:opacity-100 transition-all text-[10px] ml-0.5"
             >
               ✕
@@ -63,13 +124,57 @@ export function WatchlistManager({ items, onUpdate }: Props) {
       ))}
 
       <div className="mt-3 px-3 space-y-2">
-        <Input
-          value={symbol}
-          onChange={(e) => setSymbol(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          placeholder="Add ticker (e.g. RELIANCE)"
-          className="h-7 text-[11px] bg-[#161616] border-[#2a2a2a] text-[#aaa] placeholder:text-[#333] rounded-lg"
-        />
+        {/* Input + dropdown */}
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !showDropdown) handleAdd();
+              if (e.key === "Escape") setShowDropdown(false);
+            }}
+            onFocus={() => { if (suggestions.length > 0) setShowDropdown(true); }}
+            placeholder="Add ticker (e.g. RELIANCE)"
+            className="h-7 text-[11px] bg-[#161616] border-[#2a2a2a] text-[#aaa] placeholder:text-[#333] rounded-lg pr-6"
+          />
+          {searching && (
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#444]">
+              ···
+            </span>
+          )}
+
+          {showDropdown && suggestions.length > 0 && (
+            <div
+              ref={dropdownRef}
+              className="absolute left-0 right-0 top-full mt-1 bg-[#131313] border border-[#252525] rounded-xl overflow-hidden z-40 shadow-xl"
+            >
+              {suggestions.map((s) => (
+                <button
+                  key={s.symbol}
+                  onClick={() => selectSuggestion(s)}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/[0.04] transition-colors text-left"
+                >
+                  <div className="min-w-0">
+                    <span className="text-[12px] font-semibold text-[#d0d0d0]">{s.symbol}</span>
+                    <span className="text-[10px] text-[#555] ml-1.5 truncate">{s.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    <span className="text-[9px] text-[#444]">{s.exchange}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                      s.type === "stock" ? "bg-[#ff5530]/10 text-[#ff5530]" :
+                      s.type === "crypto" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
+                      "bg-[#3b82f6]/10 text-[#3b82f6]"
+                    }`}>
+                      {s.type}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-1">
           {(["stock", "crypto", "forex"] as const).map((t) => (
             <button
@@ -85,6 +190,7 @@ export function WatchlistManager({ items, onUpdate }: Props) {
             </button>
           ))}
         </div>
+
         <Button
           onClick={handleAdd}
           disabled={loading || !symbol.trim()}
@@ -93,6 +199,14 @@ export function WatchlistManager({ items, onUpdate }: Props) {
           {loading ? "Adding..." : "Add"}
         </Button>
       </div>
+
+      {selected && (
+        <TickerModal
+          symbol={selected.symbol}
+          type={selected.type}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }

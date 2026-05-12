@@ -9,6 +9,8 @@ from routes.market import router as market_router
 from routes.news import router as news_router
 from routes.watchlist import router as watchlist_router
 from routes.admin import router as admin_router
+from routes.search import router as search_router
+from routes.ticker import router as ticker_router
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -70,6 +72,8 @@ app.include_router(market_router)
 app.include_router(news_router)
 app.include_router(watchlist_router)
 app.include_router(admin_router)
+app.include_router(search_router)
+app.include_router(ticker_router)
 
 @app.get("/health")
 def health():

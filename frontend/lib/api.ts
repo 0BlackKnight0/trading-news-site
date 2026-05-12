@@ -1,5 +1,5 @@
 // frontend/lib/api.ts
-import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType } from "@/types";
+import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType, SearchResult, TickerDetail } from "@/types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "https://trading-news-site-production.up.railway.app";
 
@@ -22,4 +22,8 @@ export const api = {
     }),
   removeFromWatchlist: (symbol: string) =>
     fetchJSON<{ status: string }>(`/watchlist/${symbol}`, { method: "DELETE" }),
+  searchTicker: (q: string) =>
+    fetchJSON<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
+  getTickerDetail: (symbol: string, type: WatchlistType) =>
+    fetchJSON<TickerDetail>(`/ticker/${symbol}?type=${type}`),
 };
