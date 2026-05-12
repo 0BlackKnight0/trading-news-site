@@ -1,43 +1,75 @@
 # backend/routes/ticker.py
 import logging
 from datetime import datetime, timezone
-import pandas as pd
-import yfinance as yf
+import requests
 from fastapi import APIRouter, Query
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://finance.yahoo.com/",
+    "Origin": "https://finance.yahoo.com",
+}
+_TIMEOUT = 10
 
-def _parse_news(raw_news: list) -> list[dict]:
-    news = []
-    for item in (raw_news or [])[:10]:
-        if not isinstance(item, dict):
-            continue
-        content = item.get("content") or {}
-        if content:
-            title = content.get("title", "")
-            url_obj = content.get("canonicalUrl") or {}
-            url = url_obj.get("url", "") if isinstance(url_obj, dict) else ""
-            provider = content.get("provider") or {}
-            source = provider.get("displayName", "") if isinstance(provider, dict) else ""
-            pub = content.get("pubDate", "")
-            summary = content.get("summary", "") or ""
-        else:
+
+def _chart(symbol: str) -> dict:
+    """Fetch price + meta from Yahoo Finance v8 chart API. One call gets everything."""
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+    params = {"interval": "1d", "range": "5d", "events": "div,splits"}
+    try:
+        r = requests.get(url, params=params, headers=_HEADERS, timeout=_TIMEOUT)
+        results = r.json().get("chart", {}).get("result") or []
+        return results[0] if results else {}
+    except Exception as e:
+        logger.error(f"chart API failed for {symbol}: {e}")
+        return {}
+
+
+def _news(symbol: str) -> list[dict]:
+    """Fetch recent news from Yahoo Finance search API."""
+    try:
+        r = requests.get(
+            "https://query2.finance.yahoo.com/v1/finance/search",
+            params={"q": symbol, "newsCount": 8, "quotesCount": 0},
+            headers=_HEADERS,
+            timeout=_TIMEOUT,
+        )
+        items = r.json().get("news") or []
+        out = []
+        for item in items:
             title = item.get("title", "")
-            url = item.get("link", "")
-            source = item.get("publisher", "")
+            if not title:
+                continue
             ts = item.get("providerPublishTime")
-            pub = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else ""
-            summary = ""
-        if title:
-            news.append({"title": title, "url": url, "source": source, "published_at": pub, "summary": summary})
-    return news
+            pub = (
+                datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                if ts else ""
+            )
+            out.append({
+                "title": title,
+                "url": item.get("link", ""),
+                "source": item.get("publisher", ""),
+                "published_at": pub,
+                "summary": item.get("summary", "") or "",
+            })
+        return out
+    except Exception as e:
+        logger.error(f"news API failed for {symbol}: {e}")
+        return []
 
 
 @router.get("/ticker/{symbol}")
 def ticker_detail(symbol: str, type: str = Query(default="stock")):
     symbol = symbol.upper()
+
     result: dict = {
         "symbol": symbol,
         "name": symbol,
@@ -55,70 +87,28 @@ def ticker_detail(symbol: str, type: str = Query(default="stock")):
         "news": [],
     }
 
-    ticker = yf.Ticker(symbol)
+    chart = _chart(symbol)
+    meta = chart.get("meta") or {}
 
-    # 1. Primary price source: history() — far more reliable than info/fast_info
-    try:
-        hist = ticker.history(period="5d", auto_adjust=True)
-        if not hist.empty:
-            latest = hist.iloc[-1]
-            prev = hist.iloc[-2] if len(hist) >= 2 else None
-            price = float(latest["Close"])
-            prev_close = float(prev["Close"]) if prev is not None else None
-            change_abs = price - (prev_close or price)
-            change_pct = (change_abs / prev_close * 100) if prev_close else 0.0
-            vol = latest.get("Volume")
-            open_p = latest.get("Open")
-            result.update({
-                "price": round(price, 4),
-                "change_abs": round(change_abs, 4),
-                "change_pct": round(change_pct, 2),
-                "prev_close": round(prev_close, 4) if prev_close else None,
-                "volume": int(vol) if vol and not pd.isna(vol) else None,
-                "open": round(float(open_p), 4) if open_p and not pd.isna(open_p) else None,
-            })
-    except Exception as e:
-        logger.error(f"history() failed for {symbol}: {e}")
+    if meta:
+        price = float(meta.get("regularMarketPrice") or 0)
+        prev_close = float(meta.get("chartPreviousClose") or meta.get("previousClose") or 0)
+        change_abs = price - prev_close if prev_close else 0.0
+        change_pct = (change_abs / prev_close * 100) if prev_close else 0.0
 
-    # 2. 52-week high/low from 1-year daily history
-    try:
-        hist_1y = ticker.history(period="1y", auto_adjust=True)
-        if not hist_1y.empty:
-            result["week_52_high"] = round(float(hist_1y["High"].max()), 2)
-            result["week_52_low"] = round(float(hist_1y["Low"].min()), 2)
-    except Exception:
-        pass
+        result.update({
+            "name": meta.get("longName") or meta.get("shortName") or symbol,
+            "price": round(price, 4),
+            "change_abs": round(change_abs, 4),
+            "change_pct": round(change_pct, 2),
+            "prev_close": round(prev_close, 4) if prev_close else None,
+            "currency": meta.get("currency") or "USD",
+            "volume": meta.get("regularMarketVolume") or None,
+            "market_cap": meta.get("marketCap") or None,
+            "week_52_high": meta.get("fiftyTwoWeekHigh") or None,
+            "week_52_low": meta.get("fiftyTwoWeekLow") or None,
+            "open": meta.get("regularMarketOpen") or None,
+        })
 
-    # 3. fast_info for market cap (supplementary)
-    try:
-        fast = ticker.fast_info
-        mc = getattr(fast, "market_cap", None)
-        if mc and mc > 0:
-            result["market_cap"] = int(mc)
-    except Exception:
-        pass
-
-    # 4. info for name, currency, P/E, market cap fallback
-    try:
-        info = ticker.info or {}
-        name = info.get("longName") or info.get("shortName") or info.get("displayName")
-        if name:
-            result["name"] = name
-        result["currency"] = info.get("currency") or "USD"
-        pe = info.get("trailingPE")
-        if pe and float(pe) > 0:
-            result["pe_ratio"] = round(float(pe), 2)
-        if not result["market_cap"]:
-            mc = info.get("marketCap")
-            if mc:
-                result["market_cap"] = int(mc)
-    except Exception:
-        pass
-
-    # 5. News from yfinance
-    try:
-        result["news"] = _parse_news(ticker.news)
-    except Exception:
-        pass
-
+    result["news"] = _news(symbol)
     return result
