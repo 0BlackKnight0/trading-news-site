@@ -66,9 +66,9 @@ export function TickerModal({ symbol, type, onClose }: Props) {
       style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-2xl bg-[#0f0f0f] border border-[#1e1e1e] rounded-3xl overflow-hidden max-h-[88vh] flex flex-col">
+      <div className="w-full max-w-2xl bg-[#0f0f0f] border border-[#1e1e1e] rounded-2xl md:rounded-3xl overflow-hidden max-h-[92vh] md:max-h-[88vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-[#1a1a1a] shrink-0">
+        <div className="flex items-start justify-between px-4 md:px-6 pt-4 md:pt-6 pb-4 border-b border-[#1a1a1a] shrink-0">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[11px] font-semibold bg-white/10 text-white px-2.5 py-0.5 rounded-full">
@@ -90,21 +90,21 @@ export function TickerModal({ symbol, type, onClose }: Props) {
 
         <div className="overflow-y-auto flex-1">
           {loading ? (
-            <div className="px-6 py-8 space-y-3 animate-pulse">
+            <div className="px-4 md:px-6 py-8 space-y-3 animate-pulse">
               <div className="h-10 w-40 bg-[#1a1a1a] rounded-xl" />
-              <div className="grid grid-cols-3 gap-2 mt-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="h-16 bg-[#161616] rounded-xl" />
                 ))}
               </div>
             </div>
           ) : data?.error && !data.price ? (
-            <div className="px-6 py-8 text-[#555] text-sm">{data.error}</div>
+            <div className="px-4 md:px-6 py-8 text-[#555] text-sm">{data.error}</div>
           ) : data ? (
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-4 md:px-6 py-4 md:py-5 space-y-4 md:space-y-5">
               {/* Price block */}
-              <div className="flex items-end gap-3">
-                <span className="text-[36px] font-bold text-white leading-none tabular-nums">
+              <div className="flex flex-wrap items-end gap-3">
+                <span className="text-[30px] md:text-[36px] font-bold text-white leading-none tabular-nums">
                   {data.currency !== "USD" ? "" : "$"}{fmt(data.price, data.price > 100 ? 2 : 4)}
                   {data.currency !== "USD" && (
                     <span className="text-[18px] text-[#555] ml-1">{data.currency}</span>
@@ -121,7 +121,7 @@ export function TickerModal({ symbol, type, onClose }: Props) {
               </div>
 
               {/* Stats grid */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 <StatCell label="Market Cap" value={fmtLarge(data.market_cap)} />
                 <StatCell label="Volume" value={fmtVol(data.volume)} />
                 <StatCell label="P/E Ratio" value={data.pe_ratio ? fmt(data.pe_ratio) : "—"} />

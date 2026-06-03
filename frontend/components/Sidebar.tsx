@@ -25,7 +25,12 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [market, setMarket] = useState<MarketPrice[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
 
@@ -60,16 +65,32 @@ export function Sidebar() {
   const forex = market.filter((m) => m.category === "forex");
 
   return (
-    <aside className="w-[220px] shrink-0 bg-[#0d0d0d] border-r border-[#1c1c1c] h-screen overflow-y-auto flex flex-col">
+    <aside className={`
+      fixed inset-y-0 left-0 z-40 md:relative md:z-auto md:inset-auto
+      w-[260px] md:w-[220px] shrink-0
+      bg-[#0d0d0d] border-r border-[#1c1c1c]
+      h-screen overflow-hidden flex flex-col
+      transition-transform duration-300 ease-in-out
+      ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+    `}>
       <div className="px-3 pt-5 pb-3 border-b border-[#1c1c1c]">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse" />
-          <h1 className="text-[13px] font-semibold text-white tracking-tight">Market Intelligence</h1>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse" />
+            <h1 className="text-[13px] font-semibold text-white tracking-tight">Market Intelligence</h1>
+          </div>
+          <button
+            onClick={onClose}
+            className="md:hidden text-[#444] hover:text-[#777] p-1 -mr-1 transition-colors"
+            aria-label="Close sidebar"
+          >
+            ✕
+          </button>
         </div>
         <p className="text-[10px] text-[#555] mt-0.5 ml-3.5">Live · Auto-refreshes every 60s</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto py-2 overscroll-contain">
         {india.length > 0 && (
           <>
             <SectionLabel label="India" />

@@ -30,7 +30,11 @@ const TABS: {
   },
 ];
 
-export function NewsFeed() {
+interface NewsFeedProps {
+  onToggleSidebar: () => void;
+}
+
+export function NewsFeed({ onToggleSidebar }: NewsFeedProps) {
   const [activeTab, setActiveTab] = useState<Category>("trading");
   const [news, setNews] = useState<Record<Category, NewsItem[]>>({
     trading: [],
@@ -64,32 +68,46 @@ export function NewsFeed() {
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a]">
-      <div className="px-6 pt-5 pb-0 border-b border-[#191919]">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-[15px] font-semibold text-white tracking-tight">News Feed</h2>
-            <p className="text-[11px] text-[#333] mt-0.5">
-              {loading
-                ? "Fetching latest..."
-                : lastUpdated
-                ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · ${activeNews.length} articles`
-                : ""}
-            </p>
+      <div className="px-4 md:px-6 pt-4 md:pt-5 pb-0 border-b border-[#191919]">
+        <div className="flex items-center justify-between mb-3 md:mb-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onToggleSidebar}
+              className="md:hidden flex flex-col gap-[5px] p-1 -ml-1 text-[#555] hover:text-[#888] transition-colors"
+              aria-label="Toggle market sidebar"
+            >
+              <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
+              <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
+              <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
+            </button>
+            <div>
+              <h2 className="text-[15px] font-semibold text-white tracking-tight">News Feed</h2>
+              <p className="text-[11px] text-[#333] mt-0.5">
+                {loading
+                  ? "Fetching latest..."
+                  : lastUpdated
+                  ? `Updated ${lastUpdated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · ${activeNews.length} articles`
+                  : ""}
+              </p>
+            </div>
           </div>
           <button
             onClick={fetchAll}
-            className="text-[11px] text-[#444] hover:text-[#888] border border-[#1e1e1e] hover:border-[#2e2e2e] rounded-full px-3 py-1 transition-all"
+            className="text-[11px] text-[#444] hover:text-[#888] border border-[#1e1e1e] hover:border-[#2e2e2e] rounded-full px-3 py-1 transition-all shrink-0"
           >
             Refresh
           </button>
         </div>
 
-        <div className="flex gap-2 pb-0">
+        <div
+          className="flex gap-2 overflow-x-auto pb-0"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}
+        >
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-1.5 rounded-full text-[12px] font-semibold border transition-all duration-150 ${
+              className={`shrink-0 px-4 py-1.5 rounded-full text-[12px] font-semibold border transition-all duration-150 ${
                 activeTab === tab.key
                   ? tab.activeClasses
                   : "bg-transparent text-[#555] border-[#1e1e1e] hover:border-[#2e2e2e] hover:text-[#888]"
@@ -110,7 +128,7 @@ export function NewsFeed() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 pt-5">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6 pt-4 md:pt-5">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {Array.from({ length: 6 }).map((_, i) => (
