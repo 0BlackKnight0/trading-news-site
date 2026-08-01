@@ -4,6 +4,7 @@ import re
 import html
 import feedparser
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 RSS_FEEDS = {
@@ -46,6 +47,8 @@ NEWSAPI_QUERIES = {
 
 NEWS_PER_FEED = 10
 HTTP_TIMEOUT = 10
+MAX_WORKERS = 8
+FEED_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; TradingNewsBot/1.0)"}
 
 _TRADING_BLOCK = [
     "biopic", " actor ", " actress ", "film release", "movie release",
@@ -89,7 +92,10 @@ def _is_trading_relevant(title: str) -> bool:
 
 def parse_rss(url: str, category: str, source: str) -> list[dict]:
     try:
-        feed = feedparser.parse(url)
+        # Fetch with requests rather than letting feedparser open the URL —
+        # feedparser has no timeout, and a hung feed would stall the request.
+        resp = requests.get(url, headers=FEED_HEADERS, timeout=HTTP_TIMEOUT)
+        feed = feedparser.parse(resp.content)
         items = []
         for entry in feed.entries[:NEWS_PER_FEED]:
             published_at = None
@@ -149,11 +155,7 @@ def fetch_newsapi(category: str) -> list[dict]:
         return []
 
 
-def fetch_news(category: str) -> list[dict]:
-    items = []
-    for url, source in RSS_FEEDS.get(category, []):
-        items.extend(parse_rss(url, category, source))
-    items.extend(fetch_newsapi(category))
+def _dedupe(items: list[dict]) -> list[dict]:
     seen = set()
     unique = []
     for item in items:
@@ -163,8 +165,37 @@ def fetch_news(category: str) -> list[dict]:
     return unique
 
 
+def _gather(tasks: list) -> list[dict]:
+    """Run fetch callables concurrently and flatten their results.
+
+    Feeds are independent and I/O bound, so serial fetching would make the
+    on-read refresh far slower than the request budget allows.
+    """
+    if not tasks:
+        return []
+    items: list[dict] = []
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(tasks))) as pool:
+        for result in pool.map(lambda fn: fn(), tasks):
+            items.extend(result)
+    return items
+
+
+def fetch_news(category: str) -> list[dict]:
+    tasks = [
+        (lambda u=url, s=source: parse_rss(u, category, s))
+        for url, source in RSS_FEEDS.get(category, [])
+    ]
+    tasks.append(lambda: fetch_newsapi(category))
+    return _dedupe(_gather(tasks))
+
+
 def fetch_all_news() -> list[dict]:
-    all_items = []
-    for category in ["trading", "tech", "energy"]:
-        all_items.extend(fetch_news(category))
-    return all_items
+    categories = ["trading", "tech", "energy"]
+    tasks = []
+    for category in categories:
+        tasks.extend(
+            (lambda u=url, s=source, c=category: parse_rss(u, c, s))
+            for url, source in RSS_FEEDS.get(category, [])
+        )
+        tasks.append(lambda c=category: fetch_newsapi(c))
+    return _dedupe(_gather(tasks))

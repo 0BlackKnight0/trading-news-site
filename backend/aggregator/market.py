@@ -1,16 +1,17 @@
 # backend/aggregator/market.py
 import requests
-import yfinance as yf
 
-try:
-    from nsepython import nse_eq, nse_index
-    NSE_AVAILABLE = True
-except Exception:
-    NSE_AVAILABLE = False
+from aggregator.yahoo import fetch_quotes
 
 CRYPTO_IDS = "bitcoin,ethereum,solana,binancecoin,ripple,cardano,polkadot,dogecoin,avalanche-2,chainlink"
 CRYPTO_LIMIT = 10
 HTTP_TIMEOUT = 10
+
+INDIA_SYMBOLS = {
+    "NIFTY": "^NSEI",
+    "SENSEX": "^BSESN",
+    "BANKNIFTY": "^NSEBANK",
+}
 FOREX_PAIRS = {
     "USD/INR": "USDINR=X",
     "EUR/USD": "EURUSD=X",
@@ -26,34 +27,33 @@ GLOBAL_SYMBOLS = {
 }
 
 
-def fetch_india() -> list[dict]:
+def _fetch_group(mapping: dict[str, str], category: str, price_digits: int) -> list[dict]:
+    """Fetch a display-name -> yahoo-symbol mapping as market_cache rows."""
+    quotes = fetch_quotes(list(mapping.values()))
     results = []
-    indices = [
-        ("NIFTY", "NIFTY 50"),
-        ("SENSEX", "SENSEX"),
-        ("BANKNIFTY", "NIFTY BANK"),
-    ]
-    for symbol, index_name in indices:
-        try:
-            if NSE_AVAILABLE:
-                data = nse_index(index_name)
-                price = float(data.get("last", 0))
-                change_pct = float(data.get("percentChange", 0))
-            else:
-                yf_symbol = {"NIFTY": "^NSEI", "SENSEX": "^BSESN", "BANKNIFTY": "^NSEBANK"}.get(symbol, "^NSEI")
-                ticker = yf.Ticker(yf_symbol)
-                info = ticker.info
-                price = info.get("regularMarketPrice", 0)
-                change_pct = info.get("regularMarketChangePercent", 0)
-            results.append({
-                "symbol": symbol,
-                "price": price,
-                "change_pct": round(change_pct, 2),
-                "category": "india",
-            })
-        except Exception:
-            pass
+    for display_symbol, yahoo_symbol in mapping.items():
+        quote = quotes.get(yahoo_symbol)
+        if not quote:
+            continue
+        results.append({
+            "symbol": display_symbol,
+            "price": round(quote["price"], price_digits),
+            "change_pct": round(quote["change_pct"], 2),
+            "category": category,
+        })
     return results
+
+
+def fetch_india() -> list[dict]:
+    return _fetch_group(INDIA_SYMBOLS, "india", 2)
+
+
+def fetch_forex() -> list[dict]:
+    return _fetch_group(FOREX_PAIRS, "forex", 4)
+
+
+def fetch_global() -> list[dict]:
+    return _fetch_group(GLOBAL_SYMBOLS, "global", 2)
 
 
 def fetch_crypto() -> list[dict]:
@@ -78,44 +78,6 @@ def fetch_crypto() -> list[dict]:
         return results
     except Exception:
         return []
-
-
-def fetch_forex() -> list[dict]:
-    results = []
-    for display_symbol, ticker_symbol in FOREX_PAIRS.items():
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            info = ticker.info
-            price = info.get("regularMarketPrice") or 0
-            change_pct = info.get("regularMarketChangePercent") or 0
-            results.append({
-                "symbol": display_symbol,
-                "price": round(price, 4),
-                "change_pct": round(change_pct, 2),
-                "category": "forex",
-            })
-        except Exception:
-            pass
-    return results
-
-
-def fetch_global() -> list[dict]:
-    results = []
-    for display_symbol, ticker_symbol in GLOBAL_SYMBOLS.items():
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            info = ticker.info
-            price = info.get("regularMarketPrice") or 0
-            change_pct = info.get("regularMarketChangePercent") or 0
-            results.append({
-                "symbol": display_symbol,
-                "price": round(price, 2),
-                "change_pct": round(change_pct, 2),
-                "category": "global",
-            })
-        except Exception:
-            pass
-    return results
 
 
 def fetch_all() -> list[dict]:

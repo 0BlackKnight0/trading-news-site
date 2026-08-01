@@ -1,6 +1,8 @@
 # backend/database.py
 import os
 import logging
+from datetime import datetime, timezone
+
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
@@ -17,12 +19,17 @@ def get_client() -> Client:
         _client = create_client(url, key)
     return _client
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
 def upsert_market(symbol: str, price: float, change_pct: float, category: str):
     get_client().table("market_cache").upsert({
         "symbol": symbol,
         "price": price,
         "change_pct": change_pct,
         "category": category,
+        # DEFAULT now() only fires on INSERT, so stamp it explicitly for updates.
+        "updated_at": _now_iso(),
     }, on_conflict="symbol").execute()
 
 def get_market() -> list[dict]:
@@ -80,3 +87,37 @@ def save_telegram_user(chat_id: int):
 def get_telegram_chat_ids() -> list[int]:
     res = get_client().table("telegram_users").select("chat_id").execute()
     return [r["chat_id"] for r in res.data]
+
+
+# --- Refresh bookkeeping -------------------------------------------------
+# Serverless has no background loop, so each read decides whether the cache
+# is stale. These track when each feed was last successfully refreshed.
+
+def mark_refreshed(key: str):
+    try:
+        get_client().table("refresh_meta").upsert(
+            {"key": key, "updated_at": _now_iso()}, on_conflict="key"
+        ).execute()
+    except Exception as e:
+        logger.error(f"mark_refreshed({key}) failed: {e}")
+
+def seconds_since_refresh(key: str) -> float | None:
+    """Seconds since `key` was last refreshed, or None if never / unknown."""
+    try:
+        res = (get_client().table("refresh_meta")
+               .select("updated_at")
+               .eq("key", key)
+               .limit(1)
+               .execute())
+        if not res.data:
+            return None
+        stamp = res.data[0].get("updated_at")
+        if not stamp:
+            return None
+        parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - parsed).total_seconds()
+    except Exception as e:
+        logger.error(f"seconds_since_refresh({key}) failed: {e}")
+        return None

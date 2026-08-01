@@ -1,7 +1,10 @@
 // frontend/lib/api.ts
 import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType, SearchResult, TickerDetail } from "@/types";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "https://trading-news-site-production.up.railway.app";
+// Set NEXT_PUBLIC_API_URL to the deployed API. The localhost fallback is for
+// local dev only — if it leaks into a deployment the failure is at least
+// obvious, rather than silently pointing at a host that no longer exists.
+const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, options);

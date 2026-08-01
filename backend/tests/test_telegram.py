@@ -1,4 +1,6 @@
 # backend/tests/test_telegram.py
+from unittest.mock import patch
+
 
 def test_format_digest():
     from telegram_bot import format_digest
@@ -39,3 +41,44 @@ def test_format_digest_arrow_direction():
     down_line = next((l for l in lines if "DOWN" in l), "")
     assert "▲" in up_line
     assert "▼" in down_line
+
+
+# --- Webhook update handling ----------------------------------------------
+
+def test_handle_update_registers_on_start():
+    import telegram_bot
+    update = {"message": {"chat": {"id": 4242}, "text": "/start"}}
+    with patch("database.save_telegram_user") as save, \
+         patch.object(telegram_bot, "send_message") as send:
+        telegram_bot.handle_update(update)
+    save.assert_called_once_with(4242)
+    send.assert_called_once()
+
+def test_handle_update_accepts_group_style_command():
+    """In groups Telegram sends '/start@botname'."""
+    import telegram_bot
+    update = {"message": {"chat": {"id": 7}, "text": "/start@mybot"}}
+    with patch("database.save_telegram_user") as save, \
+         patch.object(telegram_bot, "send_message"):
+        telegram_bot.handle_update(update)
+    save.assert_called_once_with(7)
+
+def test_handle_update_ignores_other_commands():
+    import telegram_bot
+    update = {"message": {"chat": {"id": 9}, "text": "hello there"}}
+    with patch("database.save_telegram_user") as save, \
+         patch.object(telegram_bot, "send_message"):
+        telegram_bot.handle_update(update)
+    save.assert_not_called()
+
+def test_handle_update_ignores_updates_without_message():
+    import telegram_bot
+    with patch("database.save_telegram_user") as save:
+        telegram_bot.handle_update({"edited_message": {}})
+        telegram_bot.handle_update({})
+    save.assert_not_called()
+
+def test_send_digest_noop_without_token(monkeypatch):
+    import telegram_bot
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    assert telegram_bot.send_digest() == 0
