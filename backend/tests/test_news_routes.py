@@ -28,7 +28,8 @@ def test_symbol_news_requires_a_device_key():
 
 def test_symbol_news_returns_articles_and_unread():
     _as_user()
-    with patch("routes.news.refresh_news_if_stale"), \
+    with patch("routes.news.refresh_signals_if_stale"), \
+         patch("routes.news.refresh_news_if_stale"), \
          patch("routes.news.get_watchlist", return_value=[{"symbol": "RELIANCE.NS"}]), \
          patch("routes.news.get_news_last_seen", return_value="2026-09-01T00:00:00+00:00"), \
          patch("routes.news.get_symbol_news", return_value=[ARTICLE]), \
@@ -41,7 +42,8 @@ def test_symbol_news_returns_articles_and_unread():
 
 def test_symbol_news_is_scoped_to_the_callers_watchlist():
     _as_user("u42")
-    with patch("routes.news.refresh_news_if_stale"), \
+    with patch("routes.news.refresh_signals_if_stale"), \
+         patch("routes.news.refresh_news_if_stale"), \
          patch("routes.news.get_watchlist", return_value=[{"symbol": "AAPL"}]) as wl, \
          patch("routes.news.get_news_last_seen", return_value="2026-09-01T00:00:00+00:00"), \
          patch("routes.news.get_symbol_news", return_value=[]) as getter, \
@@ -53,7 +55,8 @@ def test_symbol_news_is_scoped_to_the_callers_watchlist():
 
 def test_symbol_news_with_an_empty_watchlist_returns_nothing():
     _as_user()
-    with patch("routes.news.refresh_news_if_stale"), \
+    with patch("routes.news.refresh_signals_if_stale"), \
+         patch("routes.news.refresh_news_if_stale"), \
          patch("routes.news.get_watchlist", return_value=[]), \
          patch("routes.news.get_news_last_seen", return_value="2026-09-01T00:00:00+00:00"), \
          patch("routes.news.get_symbol_news", return_value=[]), \
@@ -77,6 +80,31 @@ def test_news_seen_requires_a_device_key():
 
 def test_category_news_stays_anonymous():
     """Market news is not user-specific — no device key required."""
-    with patch("routes.news.refresh_news_if_stale"), \
+    with patch("routes.news.refresh_signals_if_stale"), \
+         patch("routes.news.refresh_news_if_stale"), \
          patch("routes.news.get_news", return_value=[]):
         assert client.get("/news?category=trading").status_code == 200
+
+
+def test_symbol_news_ensures_signals_are_fresh_before_reading():
+    """Signals are what fetch each symbol's company name (see
+    pipeline._ensure_symbol_names) — news tagging needs that name to exist.
+    Without this, a name is missing purely because nobody happened to hit
+    /feed first."""
+    _as_user()
+    with patch("routes.news.refresh_signals_if_stale") as signals, \
+         patch("routes.news.refresh_news_if_stale"), \
+         patch("routes.news.get_watchlist", return_value=[]), \
+         patch("routes.news.get_news_last_seen", return_value="2026-09-01T00:00:00+00:00"), \
+         patch("routes.news.get_symbol_news", return_value=[]), \
+         patch("routes.news.count_news_since", return_value=0):
+        client.get("/news/symbols", headers=HEADERS)
+    signals.assert_called_once()
+
+
+def test_category_news_also_ensures_signals_are_fresh():
+    with patch("routes.news.refresh_signals_if_stale") as signals, \
+         patch("routes.news.refresh_news_if_stale"), \
+         patch("routes.news.get_news", return_value=[]):
+        client.get("/news?category=markets")
+    signals.assert_called_once()

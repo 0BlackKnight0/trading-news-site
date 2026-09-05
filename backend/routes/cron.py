@@ -40,17 +40,21 @@ def daily(authorization: str | None = Header(default=None)):
         logger.error(f"cron market refresh failed: {e}")
         result["errors"]["market"] = str(e)
 
-    try:
-        result["news"] = run_news_refresh()
-    except Exception as e:
-        logger.error(f"cron news refresh failed: {e}")
-        result["errors"]["news"] = str(e)
-
+    # Signals runs before news: it's what fetches each symbol's company name
+    # (see pipeline._ensure_symbol_names), and news tagging needs that name
+    # to match articles to a symbol. Running news first would tag nothing on
+    # a database that has never had a signals refresh.
     try:
         result["signals"] = run_signals_refresh()
     except Exception as e:
         logger.error(f"cron signals refresh failed: {e}")
         result["errors"]["signals"] = str(e)
+
+    try:
+        result["news"] = run_news_refresh()
+    except Exception as e:
+        logger.error(f"cron news refresh failed: {e}")
+        result["errors"]["news"] = str(e)
 
     try:
         result["digest_sent"] = send_digest()

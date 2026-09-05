@@ -6,7 +6,7 @@ per-user, because it is scoped to that user's watchlist.
 """
 from fastapi import APIRouter, Depends, Query
 
-from aggregator_loop import refresh_news_if_stale
+from aggregator_loop import refresh_news_if_stale, refresh_signals_if_stale
 from database import (
     count_news_since,
     get_news,
@@ -29,13 +29,18 @@ def news(category: str = Query(
     # during the category migration.
     enum=["markets", "commodities", "ai", "energy", "crypto", "geopolitics", "trading", "tech"],
 )):
-    # No background worker on serverless — the read refreshes stale data.
+    # Signals refresh is what fetches company names (see
+    # pipeline._ensure_symbol_names) — ensure it's run before news tagging so
+    # a name isn't missing purely because nobody happened to hit /feed first.
+    # Both calls are cheap staleness checks that no-op when already fresh.
+    refresh_signals_if_stale()
     refresh_news_if_stale()
     return get_news(category)
 
 
 @router.get("/news/symbols")
 def symbol_news(user: dict = Depends(current_user)):
+    refresh_signals_if_stale()
     refresh_news_if_stale()
     symbols = [row["symbol"] for row in get_watchlist(user["id"])]
     baseline = get_news_last_seen(user["id"])

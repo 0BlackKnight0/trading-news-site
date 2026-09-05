@@ -132,6 +132,20 @@ def test_cron_runs_refresh_and_digest(monkeypatch):
     signals.assert_called_once()
     digest.assert_called_once()
 
+def test_cron_refreshes_signals_before_news(monkeypatch):
+    """Signals refresh fetches each symbol's company name; news refresh tags
+    articles against those names. Running news first tags nothing on a
+    database that has never had a signals refresh — a real bug caught live
+    on the first production run after this feature shipped."""
+    monkeypatch.setenv("CRON_SECRET", "s3cret-value-1234")
+    order = []
+    with patch("routes.cron.run_market_refresh", return_value=0), \
+         patch("routes.cron.run_news_refresh", side_effect=lambda: order.append("news") or 0), \
+         patch("routes.cron.run_signals_refresh", side_effect=lambda: order.append("signals") or 0), \
+         patch("routes.cron.send_digest", return_value=0):
+        client.get("/cron/daily", headers={"Authorization": "Bearer s3cret-value-1234"})
+    assert order == ["signals", "news"]
+
 def test_cron_reports_partial_failure(monkeypatch):
     monkeypatch.setenv("CRON_SECRET", "s3cret-value-1234")
     with patch("routes.cron.run_market_refresh", side_effect=RuntimeError("yahoo down")), \
