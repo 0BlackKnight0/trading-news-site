@@ -30,8 +30,10 @@ export const api = {
     }),
   removeFromWatchlist: (symbol: string) =>
     fetchJSON<{ status: string }>(`/watchlist/${symbol}`, { method: "DELETE" }),
-  searchTicker: (q: string) =>
-    fetchJSON<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
+  searchTicker: (q: string, type?: WatchlistType) =>
+    fetchJSON<SearchResult[]>(
+      `/search?q=${encodeURIComponent(q)}${type ? `&type=${type}` : ""}`
+    ),
   getTickerDetail: (symbol: string, type: WatchlistType) =>
     fetchJSON<TickerDetail>(`/ticker/${symbol}?type=${type}`),
   getFeed: (cursor?: string) =>

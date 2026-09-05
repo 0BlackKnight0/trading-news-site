@@ -52,7 +52,10 @@ export function WatchlistManager({ items, onUpdate }: Props) {
     [items, pendingRemovals]
   );
 
-  // Autocomplete search
+  // Autocomplete search, filtered to the selected type. Also re-runs when
+  // `type` changes (not just `symbol`) so flipping stock/crypto/forex while
+  // text is already typed refreshes the dropdown immediately rather than
+  // waiting for the next keystroke.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!symbol.trim() || symbol.length < 1) {
@@ -63,7 +66,7 @@ export function WatchlistManager({ items, onUpdate }: Props) {
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const results = await api.searchTicker(symbol.trim());
+        const results = await api.searchTicker(symbol.trim(), type);
         setSuggestions(results);
         setShowDropdown(results.length > 0);
       } catch {
@@ -72,7 +75,7 @@ export function WatchlistManager({ items, onUpdate }: Props) {
         setSearching(false);
       }
     }, 350);
-  }, [symbol]);
+  }, [symbol, type]);
 
   // Close dropdown on outside click
   useEffect(() => {
