@@ -82,7 +82,9 @@ a different output adapter.
 - `news_cache` — retained; the duplicate-insert bug is fixed in §10
 - `refresh_meta` — retained; the on-read revalidation design is sound
 - `telegram_users` — gains a `user_id` foreign key
-- `watchlist` — gains a `user_id` foreign key; `symbol` is no longer globally unique
+- `watchlist` — gains a `user_id` foreign key. The old `symbol TEXT UNIQUE`
+  constraint is dropped and replaced by `UNIQUE (user_id, symbol)`, so two users
+  can watch the same symbol
 
 ### New tables
 
@@ -145,7 +147,7 @@ CREATE TABLE user_symbol_state (
   user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
   symbol        TEXT NOT NULL,
   muted         BOOLEAN NOT NULL DEFAULT false,
-  min_move_pct  NUMERIC,          -- per-symbol threshold override, NULL = default
+  min_move_pct  NUMERIC,          -- extra floor on BIG_MOVE, NULL = none
   pinned        BOOLEAN NOT NULL DEFAULT false,
   PRIMARY KEY (user_id, symbol)
 );
@@ -202,8 +204,15 @@ percentage. A 2% day means something different for HDFC Bank than for a mid-cap
 coin. This is the defensible core of the answer to "what counts as meaningful,"
 and it costs one division.
 
-`min_move_pct` in `user_symbol_state` overrides the `BIG_MOVE` threshold per symbol.
+`min_move_pct` in `user_symbol_state` is an **additional floor**, not a replacement:
+when set, `BIG_MOVE` fires only if the move clears both the 2x average-daily-range
+rule and this absolute percentage. It exists so a user can say "don't wake me for
+TSLA unless it moves 5%" without having to reason about volatility multiples.
 `muted` suppresses all non-`ALERT` events for that symbol.
+
+Because detection is global and thresholds are per-user, detectors run **unfiltered**
+and write every event once; per-user overrides are applied at read time in `/feed`.
+This keeps the write path independent of user count.
 
 ### Payload and narration
 
@@ -264,7 +273,7 @@ unauthenticated — any visitor can add or delete any symbol.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /feed?since=&limit=&cursor=` | Events newest-first, with `unread_count` and `last_seen_at` |
+| `GET /feed?limit=&cursor=&since=` | Events newest-first, with `unread_count` and `last_seen_at`. `cursor` paginates (opaque, encodes `occurred_at`); `since` optionally overrides the divider baseline, defaulting to the caller's `last_seen_at` |
 | `POST /feed/seen` | Sets `last_seen_at = now()` — the "catch up" action |
 | `GET /history?symbols=&from=&to=` | Snapshot series for sparklines and the scrubber |
 | `GET /watchlist` `POST` `DELETE` | Now user-scoped |
