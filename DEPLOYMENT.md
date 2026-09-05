@@ -81,7 +81,7 @@ Two mechanisms replace it:
 
 **On-read revalidation.** `GET /market` and `GET /news` check how long ago the
 cache was refreshed (`refresh_meta`) and refresh inline when it has expired —
-15 min for market, 30 min for news. Fetches run concurrently, so a cold refresh
+15 min for market and news. Fetches run concurrently, so a cold refresh
 costs roughly 1–3s.
 
 **A daily cron.** `/cron/daily` refreshes both caches and sends the Telegram

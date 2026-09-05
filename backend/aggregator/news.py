@@ -12,36 +12,56 @@ from datetime import datetime, timezone
 # (403 against our User-Agent) and VentureBeat (429). Curating replacements is
 # a research task, not an engineering one — see the spec's "out of scope".
 RSS_FEEDS = {
-    "trading": [
+    "markets": [
         ("https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms", "Economic Times"),
     ],
-    "tech": [
+    "commodities": [
+        ("https://oilprice.com/rss/main", "OilPrice.com"),
+    ],
+    "ai": [
         ("https://techcrunch.com/category/artificial-intelligence/feed/", "TechCrunch AI"),
         ("https://www.technologyreview.com/feed/", "MIT Tech Review"),
         ("https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "The Verge AI"),
         ("https://www.scmp.com/rss/4/feed", "SCMP Tech"),
     ],
     "energy": [
-        ("https://oilprice.com/rss/main", "OilPrice.com"),
         ("https://cleantechnica.com/feed/", "CleanTechnica"),
     ],
+    "crypto": [
+        ("https://cointelegraph.com/rss", "Cointelegraph"),
+    ],
+    # Geopolitical developments are deliberately supplied by the licensed
+    # news provider below.  A randomly scraped geopolitical RSS feed would
+    # lower quality precisely where verification matters most.
+    "geopolitics": [],
 }
 
 NEWSAPI_QUERIES = {
-    "trading": (
+    "markets": (
         "stock market OR NSE OR BSE OR Sensex OR Nifty OR RBI OR SEBI"
-        " OR earnings OR IPO OR FII OR hedge fund OR equity market"
+        " OR earnings OR IPO OR FII OR hedge fund OR equity market OR interest rates"
     ),
-    "tech": (
+    "commodities": (
+        "gold supply OR gold price OR crude oil OR oil supply OR OPEC OR natural gas"
+        " OR LNG OR copper OR lithium OR rare earths OR commodity market"
+    ),
+    "ai": (
         "artificial intelligence OR AI model OR LLM OR ChatGPT OR Claude AI"
         " OR Gemini OR DeepSeek OR China AI OR AI agent OR OpenAI OR Anthropic"
         " OR Nvidia AI OR Baidu AI OR Alibaba AI OR Qwen OR Grok AI OR Llama"
-        " OR AI startup OR foundation model"
+        " OR AI startup OR foundation model OR GPU OR semiconductor OR data center"
     ),
     "energy": (
-        "oil price OR crude oil OR natural gas OR OPEC OR renewable energy"
-        " OR solar power OR wind power OR gigawatt OR energy market OR LNG"
-        " OR battery storage OR nuclear power plant"
+        "electric vehicle OR EV sales OR battery storage OR renewable energy OR solar power"
+        " OR wind power OR charging network OR power grid OR nuclear power plant"
+    ),
+    "crypto": (
+        "bitcoin OR ethereum OR cryptocurrency OR crypto market OR stablecoin OR altcoin"
+        " OR token launch OR crypto regulation OR exchange hack"
+    ),
+    "geopolitics": (
+        "sanctions OR trade tariff OR trade war OR shipping disruption OR red sea"
+        " OR military conflict OR geopolitical risk OR election market impact"
     ),
 }
 
@@ -50,7 +70,7 @@ HTTP_TIMEOUT = 10
 MAX_WORKERS = 8
 FEED_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; TradingNewsBot/1.0)"}
 
-_TRADING_BLOCK = [
+_MARKETS_BLOCK = [
     "biopic", " actor ", " actress ", "film release", "movie release",
     "delivers baby", "pregnant woman", "operation matrishakti",
     "takes oath", "sworn in as", "chief minister",
@@ -59,7 +79,7 @@ _TRADING_BLOCK = [
     "wedding ceremony",
 ]
 
-_TRADING_ALLOW = [
+_MARKETS_ALLOW = [
     "market", "stock", "share", "nse", "bse", "sensex", "nifty",
     "rupee", "rbi", "sebi", "ipo", "trading", "invest",
     "equity", "bond", "fund", "etf", "commodity", "gold", "silver",
@@ -108,13 +128,33 @@ _ENERGY_ALLOW = [
     "hydrogen", "drilling", "fuel", "grid",
 ]
 
+_COMMODITIES_ALLOW = [
+    "gold", "silver", "oil", "crude", "brent", "wti", "opec", "natural gas", "lng",
+    "copper", "lithium", "rare earth", "commodity", "refinery", "barrel", "mining",
+]
+
+_CRYPTO_ALLOW = [
+    "bitcoin", "ethereum", "crypto", "cryptocurrency", "token", "stablecoin", "altcoin",
+    "blockchain", "defi", "exchange", "wallet", "mining", "solana", "xrp",
+]
+
+_GEOPOLITICS_ALLOW = [
+    "sanction", "tariff", "trade war", "conflict", "war", "shipping", "red sea",
+    "election", "geopolitical", "military", "blockade", "embargo", "ceasefire",
+]
+
 # category -> (block list, allow list). A category absent from this map is
 # unfiltered: better to let news through than to silently drop a whole
 # category because someone added it without lists.
 _CATEGORY_FILTERS = {
-    "trading": (_TRADING_BLOCK, _TRADING_ALLOW),
+    "markets": (_MARKETS_BLOCK, _MARKETS_ALLOW),
+    "trading": (_MARKETS_BLOCK, _MARKETS_ALLOW),
+    "commodities": (_ENERGY_BLOCK, _COMMODITIES_ALLOW),
+    "ai": (_TECH_BLOCK, _TECH_ALLOW),
     "tech": (_TECH_BLOCK, _TECH_ALLOW),
     "energy": (_ENERGY_BLOCK, _ENERGY_ALLOW),
+    "crypto": (_ENERGY_BLOCK, _CRYPTO_ALLOW),
+    "geopolitics": (_TRADING_BLOCK, _GEOPOLITICS_ALLOW),
 }
 
 # Sources NewsAPI keeps surfacing that never carry market news. Matched on the
@@ -264,7 +304,7 @@ def fetch_news(category: str) -> list[dict]:
 
 
 def fetch_all_news() -> list[dict]:
-    categories = ["trading", "tech", "energy"]
+    categories = ["markets", "commodities", "ai", "energy", "crypto", "geopolitics"]
     tasks = []
     for category in categories:
         tasks.extend(

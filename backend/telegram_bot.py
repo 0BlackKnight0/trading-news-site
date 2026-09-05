@@ -101,8 +101,8 @@ def send_digest() -> int:
 
     text = format_digest(
         get_market(),
-        get_news("trading"),
-        get_news("tech"),
+        get_news("markets"),
+        get_news("ai"),
         get_news("energy"),
     )
 

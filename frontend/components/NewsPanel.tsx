@@ -5,9 +5,12 @@ import { api } from "@/lib/api";
 import { useInterval } from "@/hooks/useInterval";
 
 const CATEGORIES: { key: NewsCategory; label: string }[] = [
-  { key: "trading", label: "Trading" },
-  { key: "tech", label: "AI & Tech" },
-  { key: "energy", label: "Energy" },
+  { key: "markets", label: "Markets" },
+  { key: "commodities", label: "Gold & Oil" },
+  { key: "ai", label: "AI" },
+  { key: "energy", label: "EV & Energy" },
+  { key: "crypto", label: "Crypto" },
+  { key: "geopolitics", label: "Politics" },
 ];
 
 function timeAgo(iso: string | null): string {
@@ -47,7 +50,7 @@ export function NewsPanel() {
   const [symbolNews, setSymbolNews] = useState<NewsItem[]>([]);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
-  const [category, setCategory] = useState<NewsCategory>("trading");
+  const [category, setCategory] = useState<NewsCategory>("markets");
   const [marketNews, setMarketNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -70,7 +73,9 @@ export function NewsPanel() {
   useEffect(() => {
     load();
   }, [load]);
-  useInterval(load, 300_000);
+  // The API revalidates its source cache every fifteen minutes. Polling more
+  // often keeps an active page responsive without repeatedly fetching feeds.
+  useInterval(load, 60_000);
 
   async function catchUp() {
     try {
@@ -132,11 +137,11 @@ export function NewsPanel() {
         ))
       )}
 
-      <div className="flex items-center gap-2 px-4 pt-6 pb-2">
+      <div className="flex items-start gap-2 px-4 pt-6 pb-2">
         <span className="text-[10px] uppercase tracking-[0.12em] text-[#555]">
-          Markets
+          Market intelligence
         </span>
-        <div className="flex gap-1.5 ml-3">
+        <div className="flex flex-wrap gap-1.5 ml-3 -mt-1">
           {CATEGORIES.map((c) => (
             <button
               key={c.key}

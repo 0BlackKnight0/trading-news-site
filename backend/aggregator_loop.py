@@ -32,7 +32,9 @@ def _utc_now_iso() -> str:
 logger = logging.getLogger(__name__)
 
 MARKET_TTL = 900    # 15 minutes
-NEWS_TTL = 1800     # 30 minutes
+# News is the product's event-discovery layer.  Keep its cache no older than
+# fifteen minutes whenever somebody is using the dashboard.
+NEWS_TTL = 900      # 15 minutes
 SIGNALS_TTL = 900   # 15 minutes
 
 # Per-instance memo. Warm invocations skip the staleness query entirely, and

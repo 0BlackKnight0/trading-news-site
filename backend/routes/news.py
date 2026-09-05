@@ -23,7 +23,12 @@ SYMBOL_NEWS_LIMIT = 30
 
 
 @router.get("/news")
-def news(category: str = Query(default="trading", enum=["trading", "tech", "energy"])):
+def news(category: str = Query(
+    default="markets",
+    # Legacy values keep previously cached links and older clients working
+    # during the category migration.
+    enum=["markets", "commodities", "ai", "energy", "crypto", "geopolitics", "trading", "tech"],
+)):
     # No background worker on serverless — the read refreshes stale data.
     refresh_news_if_stale()
     return get_news(category)

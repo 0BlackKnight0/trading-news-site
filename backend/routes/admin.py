@@ -33,13 +33,13 @@ def force_refresh(_: None = Depends(require_cron_secret)):
         news_error = str(e)
 
     market = get_market()
-    trading = get_news("trading")
-    tech = get_news("tech")
+    markets = get_news("markets")
+    ai = get_news("ai")
     energy = get_news("energy")
 
     return {
         "market_count": len(market),
-        "news_count": {"trading": len(trading), "tech": len(tech), "energy": len(energy)},
+        "news_count": {"markets": len(markets), "ai": len(ai), "energy": len(energy)},
         "market_error": market_error,
         "news_error": news_error,
         "market_sample": market[:2] if market else [],
