@@ -85,23 +85,63 @@ section only. They do not affect **Your symbols**.
 
 ## 4. Symbol matching
 
-Matching a headline to a ticker by string comparison is unreliable: `TCS`
-occurs inside unrelated words, and `INFY` never appears in prose.
+**The original design was wrong and has been replaced. Recording why, because
+the failure was subtle.**
 
-**We do not solve this ourselves.** `routes/ticker.py::_news` already fetches
-per-symbol news from Yahoo's search API (`/v1/finance/search?q=<symbol>&
-newsCount=8`) and it is proven in production. Yahoo performs the entity
-resolution.
+The first version delegated entity resolution to Yahoo's search endpoint
+(`/v1/finance/search?q=<symbol>&newsCount=8`), on the reasoning that
+`routes/ticker.py` already called it successfully in production.
 
-So symbol news is fetched per watchlist symbol from that endpoint and stored in
-`news_cache` with a `symbol` column set. General category news keeps
-`symbol IS NULL`.
+It does return data. It does not return *relevant* data. Verified 2026-09-05:
 
-**Consequence accepted:** coverage depends on Yahoo's tagging. A symbol Yahoo
-tags poorly gets less news. That is a better failure than a fuzzy matcher
-confidently attributing the wrong story to a holding.
+| Query | Result |
+| --- | --- |
+| `q=RELIANCE.NS`, `quotesCount=0` | generic finance feed |
+| `q=RELIANCE.NS`, `quotesCount=1` | identical generic feed |
+| `q=Reliance Industries` (company name) | identical generic feed |
+| `query1` host instead of `query2` | identical generic feed |
+| `q=AAPL` | ~37% actually about Apple |
 
----
+`RELIANCE.NS`, `TCS.NS` and `INFY.NS` all return the **byte-identical** three
+articles — "Annuities have gotten a bad rap", "Wall Street weighs in on Fed",
+"Two Nepal rescues revive hopes". None mention the company. Shipping that would
+have put annuity articles under RELIANCE.NS: worse than an empty section,
+because it looks like it works.
+
+The lesson: working-shaped output was mistaken for working output.
+
+### What replaces it: match the articles we already fetch
+
+Each refresh already pulls roughly 60 category articles. Rather than making
+more API calls, tag the ones that mention a watchlist company.
+
+**Aliases per symbol** come from Yahoo chart `meta.longName`, which is already
+available and reliable:
+
+| Symbol | longName | Aliases |
+| --- | --- | --- |
+| `RELIANCE.NS` | Reliance Industries Limited | `reliance industries`, `reliance` |
+| `TCS.NS` | Tata Consultancy Services Limited | `tata consultancy services`, `tcs` |
+| `INFY.NS` | Infosys Limited | `infosys`, `infy` |
+| `AAPL` | Apple Inc. | `apple`, `aapl` |
+| `NVDA` | NVIDIA Corporation | `nvidia`, `nvda` |
+
+Derivation: strip corporate suffixes (`Limited`, `Ltd`, `Inc`, `Corporation`,
+`Corp`, `PLC`, `Co`) from `longName`, and add the bare ticker with any
+exchange suffix (`.NS`, `.BO`) removed. Matching is case-insensitive and
+**word-boundary anchored**, so `TCS` cannot match inside another word.
+
+Names are stored in `symbol_stats.name`, populated during the existing refresh
+so no extra fetch is needed on the hot path.
+
+**Tradeoffs accepted, stated plainly:**
+- **Lower coverage.** Only articles our feeds actually published can be tagged.
+  A symbol with no coverage shows an empty section — which is honest.
+- **Zero extra API calls.** No rate limit, no key, no quota.
+- **False positives are possible** where a ticker is an ordinary word —
+  "Reliance" is the obvious one. In a market-news corpus it nearly always
+  means the company, and the cost of a rare wrong tag is one extra headline,
+  not a wrong number.
 
 ## 5. Quality
 
@@ -269,8 +309,9 @@ cheap ignore-on-conflict behaviour.
   last, not first.
 - **Routes** — extend the existing `TestClient` + patched-database pattern;
   cover identity-scoping on `/news/symbols` and the separate news baseline.
-- **Symbol fetch** — recorded Yahoo response; assert `symbol` is set and that
-  re-running inserts nothing new.
+- **Alias derivation and matching** — pure functions; tests pin suffix
+  stripping, word-boundary anchoring (`TCS` must not match "outcomes"), and
+  the real longName values above.
 
 The existing 121 tests must continue to pass.
 
@@ -280,7 +321,7 @@ The existing 121 tests must continue to pass.
 
 | Risk | Mitigation |
 | --- | --- |
-| Yahoo per-symbol news is rate-limited on a large watchlist | Cap symbols per invocation; results persist, so coverage catches up across refreshes |
-| Yahoo tags a symbol poorly, so "Your symbols" looks empty | Section states its own emptiness honestly rather than silently collapsing |
+| A symbol gets no coverage in the feeds we poll | The section states its own emptiness honestly rather than silently collapsing. This is the expected cost of the matching approach |
+| A ticker that is an ordinary word over-matches ("Reliance") | Word-boundary anchoring plus a market-news corpus; a rare wrong tag costs one headline, not a wrong number |
 | Denylist becomes a maintenance burden | Keep it small and evidence-based; the relevance filter is the primary defence |
 | Corroboration grouping mis-merges distinct stories with similar titles | Normalise conservatively (lowercase, strip punctuation, first 60 chars); it only adds +1 to a score |
