@@ -14,6 +14,7 @@ from database import (
     get_all_watched_symbols,
     insert_news,
     mark_refreshed,
+    prune_news,
     seconds_since_refresh,
     upsert_market,
 )
@@ -56,6 +57,7 @@ def run_market_refresh():
 def run_news_refresh():
     items = fetch_all_news()
     insert_news(items)
+    prune_news()
     if items:
         _mark("news")
     logger.info(f"News refreshed: {len(items)} articles")

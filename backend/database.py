@@ -1,7 +1,7 @@
 # backend/database.py
 import os
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from supabase import create_client, Client
 
@@ -70,13 +70,24 @@ def insert_news(items: list[dict]):
         logger.error(f"insert_news failed: {e}")
 
 def get_news(category: str) -> list[dict]:
+    # nullsfirst=False matters: Postgres orders DESC as NULLS FIRST by
+    # default, so an article with no published_at outranks today's news.
     res = (get_client().table("news_cache")
            .select("*")
            .eq("category", category)
-           .order("published_at", desc=True)
+           .order("published_at", desc=True, nullsfirst=False)
            .limit(20)
            .execute())
     return res.data
+
+
+def prune_news(days: int = 30) -> None:
+    """Drop articles older than `days`. news_cache otherwise grows forever."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    try:
+        get_client().table("news_cache").delete().lt("published_at", cutoff).execute()
+    except Exception as e:
+        logger.error(f"prune_news failed: {e}")
 
 def get_watchlist(user_id: str) -> list[dict]:
     return (get_client().table("watchlist")

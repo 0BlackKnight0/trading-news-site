@@ -142,3 +142,22 @@ def test_count_events_since_filters_by_symbols_and_compares_on_created_at():
     assert count == 3
     table.select.return_value.in_.assert_called_once_with("symbol", ["RELIANCE"])
     chain.gt.assert_called_once_with("created_at", "2026-01-01T00:00:00+00:00")
+
+
+def test_get_news_orders_undated_articles_last():
+    """Postgres defaults DESC to NULLS FIRST, which floats undated news
+    above genuinely fresh articles and can fill the whole 20-row window."""
+    with patch("database.get_client") as client:
+        chain = client.return_value.table.return_value.select.return_value.eq.return_value
+        chain.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        database.get_news("trading")
+    assert chain.order.call_args[1]["nullsfirst"] is False
+
+
+def test_prune_news_deletes_older_than_the_window():
+    table = MagicMock()
+    with patch("database.get_client") as client:
+        client.return_value.table.return_value = table
+        database.prune_news(days=30)
+    table.delete.assert_called_once()
+    assert table.delete.return_value.lt.call_args[0][0] == "published_at"
