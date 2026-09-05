@@ -74,14 +74,24 @@ def get_news(category: str) -> list[dict]:
            .execute())
     return res.data
 
-def get_watchlist() -> list[dict]:
-    return get_client().table("watchlist").select("*").execute().data
+def get_watchlist(user_id: str) -> list[dict]:
+    return (get_client().table("watchlist")
+            .select("*").eq("user_id", user_id).execute().data)
 
-def add_to_watchlist(symbol: str, type_: str):
-    get_client().table("watchlist").insert({"symbol": symbol.upper(), "type": type_}).execute()
+def add_to_watchlist(user_id: str, symbol: str, type_: str):
+    get_client().table("watchlist").upsert(
+        {"user_id": user_id, "symbol": symbol.upper(), "type": type_},
+        on_conflict="user_id,symbol",
+    ).execute()
 
-def remove_from_watchlist(symbol: str):
-    get_client().table("watchlist").delete().eq("symbol", symbol.upper()).execute()
+def remove_from_watchlist(user_id: str, symbol: str):
+    (get_client().table("watchlist")
+     .delete().eq("user_id", user_id).eq("symbol", symbol.upper()).execute())
+
+def get_all_watched_symbols() -> list[str]:
+    """Every symbol on any watchlist — the refresh pipeline's work queue."""
+    rows = get_client().table("watchlist").select("symbol").execute().data or []
+    return sorted({r["symbol"] for r in rows})
 
 def save_telegram_user(chat_id: int):
     get_client().table("telegram_users").upsert({"chat_id": chat_id}, on_conflict="chat_id").execute()

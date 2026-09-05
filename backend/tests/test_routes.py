@@ -4,8 +4,19 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from main import app
+from identity import MIN_KEY_LENGTH, current_user
 
 client = TestClient(app)
+
+WL_HEADERS = {"X-Device-Key": "w" * MIN_KEY_LENGTH}
+
+
+def _as_watchlist_user(user_id="u1"):
+    app.dependency_overrides[current_user] = lambda: {"id": user_id}
+
+
+def teardown_function():
+    app.dependency_overrides.clear()
 
 def test_health():
     resp = client.get("/health")
@@ -43,22 +54,49 @@ def test_get_news_revalidates_before_reading():
         client.get("/news?category=tech")
     refresh.assert_called_once()
 
-def test_watchlist_get():
-    with patch("routes.watchlist.get_watchlist", return_value=[]):
-        resp = client.get("/watchlist")
-    assert resp.status_code == 200
+def test_watchlist_requires_a_device_key():
+    assert client.get("/watchlist").status_code == 401
 
-def test_watchlist_post():
-    with patch("routes.watchlist.add_to_watchlist"):
-        resp = client.post("/watchlist", json={"symbol": "RELIANCE", "type": "stock"})
-    assert resp.status_code == 200
-    assert resp.json()["symbol"] == "RELIANCE"
 
-def test_watchlist_delete():
-    with patch("routes.watchlist.remove_from_watchlist"):
-        resp = client.delete("/watchlist/RELIANCE")
+def test_watchlist_get_is_scoped_to_the_caller():
+    _as_watchlist_user("u42")
+    with patch("routes.watchlist.get_watchlist", return_value=[]) as getter:
+        resp = client.get("/watchlist", headers=WL_HEADERS)
     assert resp.status_code == 200
+    getter.assert_called_once_with("u42")
+
+
+def test_watchlist_post_records_the_owner():
+    _as_watchlist_user("u42")
+    with patch("routes.watchlist.add_to_watchlist") as adder:
+        resp = client.post("/watchlist", json={"symbol": "RELIANCE", "type": "stock"},
+                           headers=WL_HEADERS)
     assert resp.json()["symbol"] == "RELIANCE"
+    adder.assert_called_once_with("u42", "RELIANCE", "stock")
+
+
+def test_watchlist_delete_is_scoped_to_the_caller():
+    _as_watchlist_user("u42")
+    with patch("routes.watchlist.remove_from_watchlist") as remover:
+        resp = client.delete("/watchlist/RELIANCE", headers=WL_HEADERS)
+    assert resp.json()["symbol"] == "RELIANCE"
+    remover.assert_called_once_with("u42", "RELIANCE")
+
+
+def test_admin_refresh_rejects_a_missing_secret(monkeypatch):
+    """Currently open to the world — anyone can trigger a full refresh."""
+    monkeypatch.setenv("CRON_SECRET", "s3cret-value-1234")
+    assert client.post("/admin/refresh").status_code == 401
+
+
+def test_admin_refresh_accepts_the_cron_secret(monkeypatch):
+    monkeypatch.setenv("CRON_SECRET", "s3cret-value-1234")
+    with patch("routes.admin.run_market_refresh"), patch("routes.admin.run_news_refresh"), \
+         patch("routes.admin.get_market", return_value=[]), \
+         patch("routes.admin.get_news", return_value=[]):
+        resp = client.post("/admin/refresh",
+                           headers={"Authorization": "Bearer s3cret-value-1234"})
+    assert resp.status_code == 200
 
 
 # --- Cron -----------------------------------------------------------------
