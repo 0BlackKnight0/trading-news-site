@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from supabase import create_client, Client
 
+from signals.types import Bar, DetectedEvent, SymbolStats
+
 logger = logging.getLogger(__name__)
 
 _client: Client | None = None
@@ -45,10 +47,14 @@ def insert_news(items: list[dict]):
         new_items = [i for i in items if i["title"] not in existing_titles]
         if new_items:
             try:
-                get_client().table("news_cache").insert(new_items).execute()
+                (get_client().table("news_cache")
+                 .upsert(new_items, on_conflict="url", ignore_duplicates=True)
+                 .execute())
             except Exception:
                 stripped = [{k: v for k, v in item.items() if k != "summary"} for item in new_items]
-                get_client().table("news_cache").insert(stripped).execute()
+                (get_client().table("news_cache")
+                 .upsert(stripped, on_conflict="url", ignore_duplicates=True)
+                 .execute())
 
         # Backfill summaries for existing articles that have none
         for item in items:
@@ -72,14 +78,24 @@ def get_news(category: str) -> list[dict]:
            .execute())
     return res.data
 
-def get_watchlist() -> list[dict]:
-    return get_client().table("watchlist").select("*").execute().data
+def get_watchlist(user_id: str) -> list[dict]:
+    return (get_client().table("watchlist")
+            .select("*").eq("user_id", user_id).execute().data)
 
-def add_to_watchlist(symbol: str, type_: str):
-    get_client().table("watchlist").insert({"symbol": symbol.upper(), "type": type_}).execute()
+def add_to_watchlist(user_id: str, symbol: str, type_: str):
+    get_client().table("watchlist").upsert(
+        {"user_id": user_id, "symbol": symbol.upper(), "type": type_},
+        on_conflict="user_id,symbol",
+    ).execute()
 
-def remove_from_watchlist(symbol: str):
-    get_client().table("watchlist").delete().eq("symbol", symbol.upper()).execute()
+def remove_from_watchlist(user_id: str, symbol: str):
+    (get_client().table("watchlist")
+     .delete().eq("user_id", user_id).eq("symbol", symbol.upper()).execute())
+
+def get_all_watched_symbols() -> list[str]:
+    """Every symbol on any watchlist — the refresh pipeline's work queue."""
+    rows = get_client().table("watchlist").select("symbol").execute().data or []
+    return sorted({r["symbol"] for r in rows})
 
 def save_telegram_user(chat_id: int):
     get_client().table("telegram_users").upsert({"chat_id": chat_id}, on_conflict="chat_id").execute()
@@ -121,3 +137,177 @@ def seconds_since_refresh(key: str) -> float | None:
     except Exception as e:
         logger.error(f"seconds_since_refresh({key}) failed: {e}")
         return None
+
+
+# --- The Line: snapshots, stats, events, users ---------------------------
+
+def upsert_snapshots(symbol: str, bars: list[Bar]) -> int:
+    """Persist daily bars. Idempotent on (symbol, ts)."""
+    if not bars:
+        return 0
+    rows = [{
+        "symbol": symbol, "ts": b.ts, "open": b.open, "high": b.high,
+        "low": b.low, "close": b.close, "volume": b.volume, "source": "yahoo",
+    } for b in bars]
+    get_client().table("price_snapshots").upsert(rows, on_conflict="symbol,ts").execute()
+    return len(rows)
+
+
+def get_snapshots(symbol: str, limit: int = 260) -> list[Bar]:
+    """The most recent `limit` bars for a symbol, returned oldest-first."""
+    res = (get_client().table("price_snapshots")
+           .select("ts, open, high, low, close, volume")
+           .eq("symbol", symbol)
+           .order("ts", desc=True)
+           .limit(limit)
+           .execute())
+    bars = [Bar(ts=r["ts"], open=r["open"], high=r["high"], low=r["low"],
+                close=float(r["close"]), volume=r["volume"])
+            for r in reversed(res.data or []) if r.get("close") is not None]
+    return bars
+
+
+def upsert_symbol_stats(symbol: str, stats: SymbolStats) -> None:
+    get_client().table("symbol_stats").upsert({
+        "symbol": symbol,
+        "avg_daily_range": stats.avg_daily_range,
+        "avg_volume_20d": int(stats.avg_volume_20d) if stats.avg_volume_20d else None,
+        "vol_30d": stats.vol_30d,
+        "high_52w": stats.high_52w,
+        "low_52w": stats.low_52w,
+        "high_20d": stats.high_20d,
+        "low_20d": stats.low_20d,
+        "computed_at": _now_iso(),
+    }, on_conflict="symbol").execute()
+
+
+def upsert_events(events: list[DetectedEvent]) -> int:
+    """Write events idempotently.
+
+    Payload and severity are refreshed rather than ignored: the current day's
+    bar is incomplete intraday, so a move detected at 10:00 can fade by close.
+    `occurred_at` pins first detection and never moves.
+    """
+    if not events:
+        return 0
+    rows = [{
+        "symbol": e.symbol, "kind": e.kind, "occurred_at": e.occurred_at,
+        "severity": e.severity, "payload": e.payload, "dedupe_key": e.dedupe_key,
+    } for e in events]
+    get_client().table("events").upsert(rows, on_conflict="dedupe_key").execute()
+    return len(rows)
+
+
+def get_events(symbols: list[str], before_ts: str | None = None, before_id: int | None = None, limit: int = 50) -> list[dict]:
+    """Events newest-first, ordered by (occurred_at, id), scoped to `symbols`.
+
+    `occurred_at` is a market bar's timestamp, so every symbol on the same
+    exchange session shares the exact same value — ties are the norm, not an
+    edge case. Ordering (and paginating) by `occurred_at` alone lets a strict
+    `.lt(occurred_at)` cursor skip an entire tied group. `id` (BIGSERIAL) is
+    a total order, so (occurred_at, id) breaks ties deterministically.
+
+    `before_ts`/`before_id` together form the cursor: rows strictly before
+    that (occurred_at, id) pair, walking through a tied group rather than
+    jumping over it.
+
+    `symbols` scopes the read to the caller's own watchlist. An empty list
+    means the caller watches nothing, so the query is skipped entirely
+    rather than issuing a needless (and inconsistently-handled) empty
+    `.in_()` round trip.
+    """
+    if not symbols:
+        return []
+    query = (get_client().table("events")
+             .select("*")
+             .in_("symbol", symbols)
+             .order("occurred_at", desc=True)
+             .order("id", desc=True)
+             .limit(limit))
+    if before_ts is not None and before_id is not None:
+        query = query.or_(
+            f"occurred_at.lt.{before_ts},and(occurred_at.eq.{before_ts},id.lt.{before_id})"
+        )
+    return query.execute().data or []
+
+
+def count_events_since(symbols: list[str], ts: str) -> int:
+    """Count events for `symbols` created after `ts` (the unread baseline).
+
+    Compares on `created_at` — when the row was written — not `occurred_at`,
+    which is the market session timestamp and stays constant across an
+    entire trading day's worth of intraday re-detections. See upsert_events.
+    """
+    if not symbols:
+        return 0
+    res = (get_client().table("events")
+           .select("id", count="exact")
+           .in_("symbol", symbols)
+           .gt("created_at", ts)
+           .execute())
+    return res.count or 0
+
+
+def get_or_create_user(device_key: str) -> dict:
+    """Atomically get-or-create the user for `device_key`.
+
+    Upserting (rather than select-then-insert) means two concurrent
+    invocations for a brand-new device key never race each other into a
+    23505 on the `device_key` unique constraint — Vercel routinely runs
+    Sidebar's and Feed's first-load calls in separate invocations.
+
+    `user_state` is upserted unconditionally on every call, not only when
+    the user is freshly created: if a prior call's users-write succeeded
+    but its user_state-write failed, the user would otherwise never get a
+    user_state row, and get_last_seen would return "now" forever, pinning
+    unread at 0 permanently. `ignore_duplicates=True` makes this a pure
+    self-heal — an existing row (and its real last_seen_at) is left alone;
+    only a missing row gets created, seeded to "now" so a brand-new user
+    starts with nothing marked unread.
+    """
+    created = (get_client().table("users")
+               .upsert({"device_key": device_key}, on_conflict="device_key")
+               .execute())
+    user = created.data[0]
+    (get_client().table("user_state")
+     .upsert({"user_id": user["id"], "last_seen_at": _now_iso()},
+             on_conflict="user_id", ignore_duplicates=True)
+     .execute())
+    return user
+
+
+def get_last_seen(user_id: str) -> str:
+    res = (get_client().table("user_state")
+           .select("last_seen_at").eq("user_id", user_id).limit(1).execute())
+    if res.data and res.data[0].get("last_seen_at"):
+        return res.data[0]["last_seen_at"]
+    return _now_iso()
+
+
+def set_last_seen(user_id: str) -> str:
+    stamp = _now_iso()
+    get_client().table("user_state").upsert(
+        {"user_id": user_id, "last_seen_at": stamp}, on_conflict="user_id"
+    ).execute()
+    return stamp
+
+
+def get_watchlist_quotes(user_id: str) -> list[dict]:
+    """Watchlist rows enriched with the latest stored price.
+
+    Prices come from `price_snapshots`, not from a live fetch, so the row can
+    always state honestly how old the number is. Symbols with no history yet
+    report None rather than zero — unknown is not the same as worthless.
+    """
+    rows = get_watchlist(user_id)
+    enriched = []
+    for row in rows:
+        bars = get_snapshots(row["symbol"], limit=2)
+        price = change_pct = as_of = None
+        if bars:
+            price = bars[-1].close
+            as_of = bars[-1].ts
+            if len(bars) == 2 and bars[0].close:
+                change_pct = (bars[-1].close / bars[0].close - 1) * 100
+        enriched.append({**row, "price": price, "change_pct": change_pct, "as_of": as_of})
+    return enriched

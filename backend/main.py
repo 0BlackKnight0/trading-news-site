@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routes.admin import router as admin_router
 from routes.cron import router as cron_router
+from routes.feed import router as feed_router
 from routes.market import router as market_router
 from routes.news import router as news_router
 from routes.search import router as search_router
@@ -37,6 +38,7 @@ app.include_router(search_router)
 app.include_router(ticker_router)
 app.include_router(cron_router)
 app.include_router(telegram_router)
+app.include_router(feed_router)
 
 
 @app.get("/health")

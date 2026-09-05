@@ -11,6 +11,15 @@ interface Props {
   onUpdate: () => void;
 }
 
+function ageLabel(asOf: string | null): string {
+  if (!asOf) return "no data yet";
+  const minutes = Math.floor((Date.now() - new Date(asOf).getTime()) / 60000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export function WatchlistManager({ items, onUpdate }: Props) {
   const [symbol, setSymbol] = useState("");
   const [type, setType] = useState<WatchlistType>("stock");
@@ -108,14 +117,35 @@ export function WatchlistManager({ items, onUpdate }: Props) {
           onClick={() => setSelected({ symbol: item.symbol, type: item.type })}
           className="flex items-center justify-between py-1.5 px-3 group hover:bg-white/[0.03] cursor-pointer transition-colors"
         >
-          <span className="text-[11px] font-medium text-[#888] group-hover:text-[#ccc] transition-colors">
-            {item.symbol}
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#333]">{item.type}</span>
+          <div className="min-w-0">
+            <span className="text-[11px] font-medium text-[#888] group-hover:text-[#ccc] transition-colors">
+              {item.symbol}
+            </span>
+            {/* Age is always stated. A price with no timestamp is a lie. */}
+            <span className="block text-[9px] text-[#3a3a3a]">{ageLabel(item.as_of)}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {item.price === null ? (
+              <span className="text-[10px] text-[#3a3a3a]">—</span>
+            ) : (
+              <div className="text-right">
+                <div className="text-[11px] font-semibold text-[#e0e0e0] tabular-nums leading-none">
+                  {item.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                </div>
+                {item.change_pct !== null && (
+                  <div
+                    className={`text-[9px] tabular-nums mt-0.5 ${
+                      item.change_pct >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"
+                    }`}
+                  >
+                    {item.change_pct >= 0 ? "▲" : "▼"} {Math.abs(item.change_pct).toFixed(2)}%
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={(e) => handleRemove(item.symbol, e)}
-              className="text-[#2a2a2a] hover:text-[#ef4444] opacity-0 group-hover:opacity-100 transition-all text-[10px] ml-0.5"
+              className="text-[#2a2a2a] hover:text-[#ef4444] opacity-0 group-hover:opacity-100 transition-all text-[10px]"
             >
               ✕
             </button>

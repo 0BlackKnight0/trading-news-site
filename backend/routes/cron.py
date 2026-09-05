@@ -10,7 +10,7 @@ import os
 
 from fastapi import APIRouter, Header, HTTPException
 
-from aggregator_loop import run_market_refresh, run_news_refresh
+from aggregator_loop import run_market_refresh, run_news_refresh, run_signals_refresh
 from telegram_bot import send_digest
 
 router = APIRouter(prefix="/cron")
@@ -32,7 +32,7 @@ def daily(authorization: str | None = Header(default=None)):
     """Refresh both caches, then send the morning digest."""
     _authorize(authorization)
 
-    result: dict = {"market": None, "news": None, "digest_sent": 0, "errors": {}}
+    result: dict = {"market": None, "news": None, "signals": None, "digest_sent": 0, "errors": {}}
 
     try:
         result["market"] = run_market_refresh()
@@ -45,6 +45,12 @@ def daily(authorization: str | None = Header(default=None)):
     except Exception as e:
         logger.error(f"cron news refresh failed: {e}")
         result["errors"]["news"] = str(e)
+
+    try:
+        result["signals"] = run_signals_refresh()
+    except Exception as e:
+        logger.error(f"cron signals refresh failed: {e}")
+        result["errors"]["signals"] = str(e)
 
     try:
         result["digest_sent"] = send_digest()
