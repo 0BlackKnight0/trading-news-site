@@ -6,7 +6,7 @@ import { useInterval } from "@/hooks/useInterval";
 import { EventRow } from "./EventRow";
 import { Divider } from "./Divider";
 
-export function Feed({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+export function Feed({ onToggleSidebar, embedded = false }: { onToggleSidebar?: () => void; embedded?: boolean }) {
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
@@ -49,6 +49,46 @@ export function Feed({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     lastSeenAt !== null && event.created_at > lastSeenAt;
   const dividerIndex = events.findIndex((event) => !isUnseen(event));
 
+  const body = (
+    <div className="flex-1 overflow-y-auto">
+      {loading ? (
+        <div className="p-4 space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-14 bg-[#111] rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : failed ? (
+        <p className="text-center text-[12px] text-[#f59e0b] py-16">
+          Could not reach the feed. Showing nothing rather than something stale.
+        </p>
+      ) : events.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-full text-center px-6">
+          <p className="text-[15px] font-semibold text-[#c8c8c8]">All quiet.</p>
+          <p className="text-[12px] text-[#4a4a4a] mt-1.5">
+            Nothing crossed your thresholds
+            {lastSeenAt
+              ? ` since ${new Date(lastSeenAt).toLocaleDateString("en-IN", {
+                  weekday: "long",
+                })}`
+              : ""}
+            .
+          </p>
+        </div>
+      ) : (
+        events.map((event, i) => (
+          <div key={event.id}>
+            {i === dividerIndex && lastSeenAt && <Divider lastSeenAt={lastSeenAt} />}
+            <EventRow event={event} unseen={isUnseen(event)} />
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  // Embedded inside MainPanel, the tab shell already owns the header and the
+  // <main> wrapper — rendering our own would nest one inside the other.
+  if (embedded) return body;
+
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a]">
       <header className="px-4 md:px-6 py-4 border-b border-[#191919] flex items-center gap-3">
@@ -77,40 +117,7 @@ export function Feed({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </button>
         )}
       </header>
-
-      <div className="flex-1 overflow-y-auto">
-        {loading ? (
-          <div className="p-4 space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-14 bg-[#111] rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : failed ? (
-          <p className="text-center text-[12px] text-[#f59e0b] py-16">
-            Could not reach the feed. Showing nothing rather than something stale.
-          </p>
-        ) : events.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-6">
-            <p className="text-[15px] font-semibold text-[#c8c8c8]">All quiet.</p>
-            <p className="text-[12px] text-[#4a4a4a] mt-1.5">
-              Nothing crossed your thresholds
-              {lastSeenAt
-                ? ` since ${new Date(lastSeenAt).toLocaleDateString("en-IN", {
-                    weekday: "long",
-                  })}`
-                : ""}
-              .
-            </p>
-          </div>
-        ) : (
-          events.map((event, i) => (
-            <div key={event.id}>
-              {i === dividerIndex && lastSeenAt && <Divider lastSeenAt={lastSeenAt} />}
-              <EventRow event={event} unseen={isUnseen(event)} />
-            </div>
-          ))
-        )}
-      </div>
+      {body}
     </main>
   );
 }

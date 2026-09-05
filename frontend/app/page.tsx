@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
-import { Feed } from "@/components/Feed";
+import { MainPanel } from "@/components/MainPanel";
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -14,7 +14,7 @@ export default function Home() {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <Feed onToggleSidebar={() => setSidebarOpen((v) => !v)} />
+      <MainPanel onToggleSidebar={() => setSidebarOpen((v) => !v)} />
     </div>
   );
 }
