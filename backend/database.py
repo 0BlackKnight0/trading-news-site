@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from supabase import create_client, Client
 
+from signals.types import Bar, DetectedEvent, SymbolStats
+
 logger = logging.getLogger(__name__)
 
 _client: Client | None = None
@@ -121,3 +123,110 @@ def seconds_since_refresh(key: str) -> float | None:
     except Exception as e:
         logger.error(f"seconds_since_refresh({key}) failed: {e}")
         return None
+
+
+# --- The Line: snapshots, stats, events, users ---------------------------
+
+def upsert_snapshots(symbol: str, bars: list[Bar]) -> int:
+    """Persist daily bars. Idempotent on (symbol, ts)."""
+    if not bars:
+        return 0
+    rows = [{
+        "symbol": symbol, "ts": b.ts, "open": b.open, "high": b.high,
+        "low": b.low, "close": b.close, "volume": b.volume, "source": "yahoo",
+    } for b in bars]
+    get_client().table("price_snapshots").upsert(rows, on_conflict="symbol,ts").execute()
+    return len(rows)
+
+
+def get_snapshots(symbol: str, limit: int = 260) -> list[Bar]:
+    """The most recent `limit` bars for a symbol, returned oldest-first."""
+    res = (get_client().table("price_snapshots")
+           .select("ts, open, high, low, close, volume")
+           .eq("symbol", symbol)
+           .order("ts", desc=True)
+           .limit(limit)
+           .execute())
+    bars = [Bar(ts=r["ts"], open=r["open"], high=r["high"], low=r["low"],
+                close=float(r["close"]), volume=r["volume"])
+            for r in reversed(res.data or []) if r.get("close") is not None]
+    return bars
+
+
+def upsert_symbol_stats(symbol: str, stats: SymbolStats) -> None:
+    get_client().table("symbol_stats").upsert({
+        "symbol": symbol,
+        "avg_daily_range": stats.avg_daily_range,
+        "avg_volume_20d": int(stats.avg_volume_20d) if stats.avg_volume_20d else None,
+        "vol_30d": stats.vol_30d,
+        "high_52w": stats.high_52w,
+        "low_52w": stats.low_52w,
+        "high_20d": stats.high_20d,
+        "low_20d": stats.low_20d,
+        "computed_at": _now_iso(),
+    }, on_conflict="symbol").execute()
+
+
+def upsert_events(events: list[DetectedEvent]) -> int:
+    """Write events idempotently.
+
+    Payload and severity are refreshed rather than ignored: the current day's
+    bar is incomplete intraday, so a move detected at 10:00 can fade by close.
+    `occurred_at` pins first detection and never moves.
+    """
+    if not events:
+        return 0
+    rows = [{
+        "symbol": e.symbol, "kind": e.kind, "occurred_at": e.occurred_at,
+        "severity": e.severity, "payload": e.payload, "dedupe_key": e.dedupe_key,
+    } for e in events]
+    get_client().table("events").upsert(rows, on_conflict="dedupe_key").execute()
+    return len(rows)
+
+
+def get_events(before: str | None = None, limit: int = 50) -> list[dict]:
+    """Events newest-first. `before` is a cursor on occurred_at."""
+    query = (get_client().table("events")
+             .select("*")
+             .order("occurred_at", desc=True)
+             .limit(limit))
+    if before:
+        query = query.lt("occurred_at", before)
+    return query.execute().data or []
+
+
+def count_events_since(ts: str) -> int:
+    res = (get_client().table("events")
+           .select("id", count="exact")
+           .gt("occurred_at", ts)
+           .execute())
+    return res.count or 0
+
+
+def get_or_create_user(device_key: str) -> dict:
+    existing = (get_client().table("users")
+                .select("*").eq("device_key", device_key).limit(1).execute())
+    if existing.data:
+        return existing.data[0]
+    created = get_client().table("users").insert({"device_key": device_key}).execute()
+    user = created.data[0]
+    get_client().table("user_state").upsert(
+        {"user_id": user["id"], "last_seen_at": _now_iso()}, on_conflict="user_id"
+    ).execute()
+    return user
+
+
+def get_last_seen(user_id: str) -> str:
+    res = (get_client().table("user_state")
+           .select("last_seen_at").eq("user_id", user_id).limit(1).execute())
+    if res.data and res.data[0].get("last_seen_at"):
+        return res.data[0]["last_seen_at"]
+    return _now_iso()
+
+
+def set_last_seen(user_id: str) -> str:
+    stamp = _now_iso()
+    get_client().table("user_state").upsert(
+        {"user_id": user_id, "last_seen_at": stamp}, on_conflict="user_id"
+    ).execute()
+    return stamp
