@@ -23,6 +23,18 @@ _SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Yahoo names every crypto pair "{Coin} USD" ("Bitcoin USD") — real headlines
+# say "Bitcoin", never the full phrase. Stripped as an ADDITIONAL alias, not
+# a replacement, so both forms are tried.
+_TRAILING_USD_RE = re.compile(r"\s+USD\s*$", re.IGNORECASE)
+
+# Futures contracts are named with a rolling month/year ("Gold Dec 26" today,
+# "Gold Mar 27" next quarter) that a headline never actually uses.
+_TRAILING_FUTURES_DATE_RE = re.compile(
+    r"\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2}\s*$",
+    re.IGNORECASE,
+)
+
 # Aliases that are ordinary English words (or otherwise generic enough) that
 # they turn up constantly in financial writing with no connection to the
 # company that happens to share the name. Kept lowercase to match the
@@ -33,9 +45,15 @@ _SUFFIX_RE = re.compile(
 # `apple` is deliberately excluded: in a market-news corpus "Apple" overwhelm-
 # ingly means Apple Inc., so filtering it would cost far more real coverage
 # than it would save in false positives.
+#
+# `gold` is deliberately INCLUDED, unlike `apple` — checked against live
+# production data and found genuinely worse: "a new gold mine for the
+# defense sector" and "the sleek, gold-colored two-seater" both matched
+# bare "gold" with nothing to do with the commodity. Same standard this
+# project has held everywhere else: never wrong, sometimes sparse.
 _AMBIGUOUS_ALIASES = frozenset({
     "reliance", "target", "shell", "gap", "visa", "square", "next",
-    "orange", "unity", "block", "match", "arm", "sea", "era",
+    "orange", "unity", "block", "match", "arm", "sea", "era", "gold",
 })
 
 
@@ -52,9 +70,20 @@ def _bare_ticker(symbol: str) -> str:
     return _normalize(ticker)
 
 
-def aliases_for(symbol: str, long_name: str | None) -> list[str]:
-    """Lowercase aliases for one symbol: a stripped long name plus the bare
-    ticker. De-duplicated, no empty strings."""
+def aliases_for(
+    symbol: str,
+    long_name: str | None,
+    extra_aliases: list[str] | None = None,
+) -> list[str]:
+    """Lowercase aliases for one symbol: a stripped long name, that name with
+    a trailing "USD"/futures-date token further removed, the bare ticker,
+    and any caller-supplied extras. De-duplicated, no empty strings.
+
+    `extra_aliases` covers the handful of fixed instruments where nothing in
+    the ticker or Yahoo's long name predicts common usage at all — "NIFTY 50"
+    doesn't tell you headlines say "Nifty", and nothing about "USDINR=X"
+    suggests "rupee". Reviewed and supplied by the caller, not derived.
+    """
     aliases: list[str] = []
 
     if long_name and long_name.strip():
@@ -70,9 +99,20 @@ def aliases_for(symbol: str, long_name: str | None) -> list[str]:
         if name_alias:
             aliases.append(name_alias)
 
+        further_stripped = _TRAILING_USD_RE.sub("", stripped)
+        further_stripped = _TRAILING_FUTURES_DATE_RE.sub("", further_stripped)
+        further_alias = _normalize(further_stripped)
+        if further_alias and further_alias != name_alias:
+            aliases.append(further_alias)
+
     ticker_alias = _bare_ticker(symbol)
     if ticker_alias:
         aliases.append(ticker_alias)
+
+    for extra in extra_aliases or []:
+        normalized_extra = _normalize(extra)
+        if normalized_extra:
+            aliases.append(normalized_extra)
 
     # De-dupe while preserving order.
     seen = set()

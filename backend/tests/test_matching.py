@@ -142,6 +142,23 @@ def test_real_false_positive_sentence_does_not_match_reliance():
     assert match_symbols(text, alias_map) == []
 
 
+def test_gold_dec_26_drops_bare_gold_but_keeps_the_full_name():
+    aliases = aliases_for("GC=F", "Gold Dec 26")
+    assert "gold" not in aliases
+    assert "gold dec 26" in aliases
+
+
+def test_real_false_positive_sentences_do_not_match_bare_gold():
+    """Both caught live in production news_cache — neither is about the
+    commodity: an idiom ("gold mine" meaning a valuable find) and a literal
+    color description."""
+    alias_map = {"GC=F": aliases_for("GC=F", "Gold Dec 26", extra_aliases=["gold price"])}
+    idiom = "there's a new gold mine for the defense sector after drone data leaks"
+    color = "the sleek, gold-colored two-seater looks more like a futuristic pod"
+    assert match_symbols(idiom, alias_map) == []
+    assert match_symbols(color, alias_map) == []
+
+
 def test_specific_name_mention_still_matches_reliance():
     alias_map = {
         "RELIANCE.NS": aliases_for("RELIANCE.NS", "Reliance Industries Limited"),
@@ -171,3 +188,71 @@ def test_matching_module_imports_nothing_impure():
     source = (pathlib.Path(__file__).parent.parent / "aggregator" / "matching.py").read_text()
     for token in banned:
         assert token not in source, f"matching.py must stay pure, found: {token}"
+
+
+# --- General suffix stripping beyond corporate names ------------------------
+
+def test_aliases_for_strips_a_trailing_usd_token_from_crypto_names():
+    """Yahoo names every crypto pair "{Coin} USD" — real headlines say
+    "Bitcoin", not "Bitcoin USD" as a phrase, so the un-stripped alias alone
+    never matches real coverage."""
+    aliases = aliases_for("BTC-USD", "Bitcoin USD")
+    assert "bitcoin" in aliases
+    assert "bitcoin usd" in aliases  # kept too — belt and suspenders
+
+
+def test_aliases_for_strips_a_trailing_futures_month_year_token():
+    """Futures contract names roll forward every quarter ("Gold Dec 26" now,
+    "Gold Mar 27" next) — the month/year is never what a headline says.
+    Uses CL=F rather than GC=F to isolate this stripping mechanism from the
+    separate "gold" ambiguity-filter behaviour, tested below."""
+    assert "crude oil" in aliases_for("CL=F", "Crude Oil Oct 26")
+
+
+def test_gc_f_without_the_override_has_no_usable_bare_alias():
+    """The month-year strip does produce "gold" as a candidate, but it's
+    immediately dropped as ambiguous — leaving only the useless
+    "gold dec 26" (rolls over every quarter) and the ticker "gc=f" (never
+    appears in prose). This is exactly why GC=F needs an explicit override;
+    see test_real_false_positive_sentences_do_not_match_bare_gold above for
+    what bare "gold" would have caught instead."""
+    aliases = aliases_for("GC=F", "Gold Dec 26")
+    assert aliases == ["gold dec 26", "gc=f"]
+
+
+def test_gc_f_with_its_real_override_matches_genuine_gold_price_news():
+    alias_map = {"GC=F": aliases_for("GC=F", "Gold Dec 26", extra_aliases=["gold price"])}
+    assert match_symbols("Gold price rises as the dollar weakens", alias_map) == ["GC=F"]
+
+
+def test_aliases_for_usd_stripping_is_a_noop_when_no_trailing_usd_exists():
+    """The rule only fires on a genuine trailing "USD" token — a name with no
+    such token must come through exactly as the existing corporate-suffix
+    stripping already produces it, no new alias invented."""
+    assert aliases_for("XOM", "Exxon Mobil Corporation") == ["exxon mobil", "xom"]
+
+
+# --- extra_aliases override -------------------------------------------------
+
+def test_aliases_for_includes_extra_aliases_when_given():
+    """A handful of fixed instruments (index short names, forex colloquial
+    currency names) have no derivable relationship to Yahoo's longName at
+    all — "NIFTY 50" tells you nothing about "Nifty" being the common form,
+    and nothing in the ticker or name says USD/INR quotes are called
+    "rupee" in headlines. These need an explicit, reviewed override."""
+    aliases = aliases_for("^NSEI", "NIFTY 50", extra_aliases=["nifty"])
+    assert "nifty" in aliases
+    assert "nifty 50" in aliases
+
+
+def test_aliases_for_extra_aliases_survive_the_ambiguity_filter_independently():
+    """An extra alias is still subject to the same ambiguous-word rule as a
+    derived one — it does not get special immunity. Uses a symbol/name where
+    the ticker and long-name aliases are NOT themselves ambiguous, so only
+    the passed-in extra is at risk of being (correctly) filtered out."""
+    aliases = aliases_for("XYZ.NS", "Acme Global Enterprises", extra_aliases=["shell"])
+    assert aliases == ["acme global enterprises", "xyz"]
+
+
+def test_aliases_for_works_with_no_extra_aliases():
+    assert aliases_for("AAPL", "Apple Inc.") == ["apple", "aapl"]

@@ -53,6 +53,31 @@ _WATCHLIST_TARGETS = {
 }
 
 
+# Extra news-matching aliases for symbols where nothing in the ticker or
+# Yahoo's own long name predicts how headlines actually refer to them —
+# "NIFTY 50" doesn't tell you "Nifty" is the common form, and nothing about
+# "USDINR=X" suggests articles say "rupee". Reviewed by hand, not derived.
+# Crypto and commodity-futures names don't need this: aliases_for already
+# strips their trailing "USD" / rolling contract-month tokens generically.
+NEWS_ALIAS_OVERRIDES = {
+    "^NSEI": ["nifty"],
+    "^BSESN": ["sensex"],
+    "^NSEBANK": ["bank nifty", "banknifty"],
+    "^IXIC": ["nasdaq"],
+    "^DJI": ["dow jones", "dow"],
+    "USDINR=X": ["rupee"],
+    "EURINR=X": ["euro"],
+    "EURUSD=X": ["euro"],
+    "GBPUSD=X": ["british pound"],
+    # Bare "gold" is denylisted as an ambiguous alias (see matching.py) after
+    # being caught tagging a "gold mine" idiom and a literal color
+    # description live in production. "gold price" is narrower and misses
+    # some genuine coverage (a central-bank-reserves story, for instance)
+    # in exchange for never matching those false positives.
+    "GC=F": ["gold price"],
+}
+
+
 def watchlist_target(symbol: str, category: str) -> tuple[str, str] | None:
     """The (yahoo_symbol, watchlist_type) to add for a market_cache row, or
     None if this symbol can't be added directly (unknown category, or a

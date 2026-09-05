@@ -139,6 +139,26 @@ def test_news_refresh_skips_tagging_when_no_symbol_names():
     tag.assert_not_called()
 
 
+def test_news_refresh_tags_using_a_known_extra_alias():
+    """"^NSEI"'s Yahoo name is "NIFTY 50" — a headline saying plain "Nifty"
+    would never match without the explicit override, since nothing in the
+    ticker or the official name predicts the colloquial short form."""
+    nifty_item = [{
+        "title": "Nifty ends flat as banks weigh on the index",
+        "url": "https://example.com/nifty-flat",
+        "source": "S", "category": "trading", "published_at": None,
+        "summary": None,
+    }]
+    with patch("aggregator_loop.fetch_all_news", return_value=nifty_item), \
+         patch("aggregator_loop.insert_news"), \
+         patch("aggregator_loop.prune_news"), \
+         patch("aggregator_loop.get_symbol_names", return_value={"^NSEI": "NIFTY 50"}), \
+         patch("aggregator_loop.tag_news_symbol") as tag:
+        import aggregator_loop
+        aggregator_loop.run_news_refresh()
+    tag.assert_called_once_with("https://example.com/nifty-flat", "^NSEI")
+
+
 def test_news_refresh_still_prunes_news():
     with patch("aggregator_loop.fetch_all_news", return_value=NEWS_ITEMS), \
          patch("aggregator_loop.insert_news"), \

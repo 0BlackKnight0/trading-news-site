@@ -9,6 +9,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
+from aggregator.market import NEWS_ALIAS_OVERRIDES
 from aggregator.market import fetch_all as fetch_all_market
 from aggregator.matching import aliases_for, match_symbols
 from aggregator.news import fetch_all_news
@@ -72,7 +73,7 @@ def _tag_matched_articles(items: list[dict]) -> None:
         return
     alias_map = {
         symbol: aliases for symbol, name in names.items()
-        if (aliases := aliases_for(symbol, name))
+        if (aliases := aliases_for(symbol, name, NEWS_ALIAS_OVERRIDES.get(symbol)))
     }
     if not alias_map:
         return
