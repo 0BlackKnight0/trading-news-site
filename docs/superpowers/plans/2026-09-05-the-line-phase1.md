@@ -858,14 +858,24 @@ def bars_from_chart(chart: dict) -> list[Bar]:
 
 
 def fetch_bars(symbol: str, range_: str = "3mo") -> list[Bar]:
-    """Daily bars for a symbol. Returns [] on any failure."""
-    return bars_from_chart(fetch_chart(symbol, interval="1d", range_=range_))
+    """Daily bars for a symbol. Returns [] on any failure.
+
+    The guard is real, not decorative: Yahoo returns `indicators.quote` as
+    `[None]` for a symbol with no data in the range, which is truthy and so
+    slips past the `or [{}]` fallback in bars_from_chart. A batch refresh
+    must degrade one symbol, not die.
+    """
+    try:
+        return bars_from_chart(fetch_chart(symbol, interval="1d", range_=range_))
+    except Exception as e:
+        logger.error(f"bar extraction failed for {symbol}: {e}")
+        return []
 ```
 
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd backend && ./venv/bin/python -m pytest tests/test_yahoo.py -q`
-Expected: `11 passed`
+Expected: `13 passed`
 
 - [ ] **Step 5: Commit**
 

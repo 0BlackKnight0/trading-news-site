@@ -148,4 +148,8 @@ def bars_from_chart(chart: dict) -> list[Bar]:
 
 def fetch_bars(symbol: str, range_: str = "3mo") -> list[Bar]:
     """Daily bars for a symbol. Returns [] on any failure."""
-    return bars_from_chart(fetch_chart(symbol, interval="1d", range_=range_))
+    try:
+        return bars_from_chart(fetch_chart(symbol, interval="1d", range_=range_))
+    except Exception as e:
+        logger.error(f"bar parse failed for {symbol}: {e}")
+        return []
