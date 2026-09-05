@@ -44,11 +44,21 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   }, []);
 
   const fetchWatchlist = useCallback(async () => {
+    // Called right after an add/remove, back-to-back with the mutation's own
+    // request — a transient failure here (seen live: net::ERR_FAILED on the
+    // immediate follow-up GET) previously had no recovery path, leaving the
+    // watchlist showing pre-change state until something else, like a full
+    // page reload, happened to trigger a working fetch. One retry absorbs
+    // that class of one-off failure without a full retry framework.
     try {
-      const data = await api.getWatchlist();
-      setWatchlist(data);
+      setWatchlist(await api.getWatchlist());
     } catch (e) {
-      console.error(e);
+      console.error("watchlist fetch failed, retrying once", e);
+      try {
+        setWatchlist(await api.getWatchlist());
+      } catch (e2) {
+        console.error(e2);
+      }
     }
   }, []);
 

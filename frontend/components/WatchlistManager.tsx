@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { WatchlistItem, WatchlistType, SearchResult } from "@/types";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,26 @@ export function WatchlistManager({ items, onUpdate }: Props) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Removing hides the row instantly rather than waiting on a second
+  // round-trip (DELETE, then a re-fetch of the list) to reflect it — the
+  // backend confirms the delete is already durable by the time DELETE
+  // returns, so there's nothing left to wait for. Cleared once `items`
+  // itself no longer contains the symbol, which also makes re-adding the
+  // same symbol later show up correctly rather than staying hidden.
+  const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setPendingRemovals((prev) => {
+      if (prev.size === 0) return prev;
+      const present = new Set(items.map((i) => i.symbol));
+      const next = new Set([...prev].filter((sym) => present.has(sym)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [items]);
+  const visibleItems = useMemo(
+    () => items.filter((item) => !pendingRemovals.has(item.symbol)),
+    [items, pendingRemovals]
+  );
 
   // Autocomplete search
   useEffect(() => {
@@ -94,11 +114,19 @@ export function WatchlistManager({ items, onUpdate }: Props) {
 
   async function handleRemove(sym: string, e: React.MouseEvent) {
     e.stopPropagation();
+    setPendingRemovals((prev) => new Set(prev).add(sym));
     try {
       await api.removeFromWatchlist(sym);
       onUpdate();
     } catch (e) {
       console.error(e);
+      // The delete didn't actually happen — put the row back rather than
+      // leaving it looking removed when it isn't.
+      setPendingRemovals((prev) => {
+        const next = new Set(prev);
+        next.delete(sym);
+        return next;
+      });
     }
   }
 
@@ -111,7 +139,7 @@ export function WatchlistManager({ items, onUpdate }: Props) {
         </span>
       </div>
 
-      {items.map((item) => (
+      {visibleItems.map((item) => (
         <div
           key={item.id}
           onClick={() => setSelected({ symbol: item.symbol, type: item.type })}

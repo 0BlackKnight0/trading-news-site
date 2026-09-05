@@ -68,11 +68,39 @@ def test_watchlist_get_is_scoped_to_the_caller():
 
 def test_watchlist_post_records_the_owner():
     _as_watchlist_user("u42")
-    with patch("routes.watchlist.add_to_watchlist") as adder:
+    with patch("routes.watchlist.add_to_watchlist") as adder, \
+         patch("routes.watchlist.refresh_symbol"):
         resp = client.post("/watchlist", json={"symbol": "RELIANCE", "type": "stock"},
                            headers=WL_HEADERS)
     assert resp.json()["symbol"] == "RELIANCE"
     adder.assert_called_once_with("u42", "RELIANCE", "stock")
+
+
+def test_watchlist_post_backfills_the_new_symbol_immediately():
+    """Without this, a symbol added via POST /watchlist has no
+    price_snapshots until the next GLOBAL signals refresh — which can be up
+    to SIGNALS_TTL (15 min) away regardless of when this symbol was added,
+    since staleness is tracked once for all symbols, not per-symbol. The row
+    shows "no data yet" the whole time, reading as if adding did nothing."""
+    _as_watchlist_user("u42")
+    with patch("routes.watchlist.add_to_watchlist"), \
+         patch("routes.watchlist.refresh_symbol") as backfill:
+        client.post("/watchlist", json={"symbol": "reliance", "type": "stock"},
+                    headers=WL_HEADERS)
+    backfill.assert_called_once_with("RELIANCE")
+
+
+def test_watchlist_post_succeeds_even_if_the_backfill_fails():
+    """A slow or failing Yahoo call must not turn a successful add into a
+    500 — the symbol is on the watchlist either way; the price just waits
+    for the next scheduled refresh instead of showing up instantly."""
+    _as_watchlist_user("u42")
+    with patch("routes.watchlist.add_to_watchlist"), \
+         patch("routes.watchlist.refresh_symbol", side_effect=RuntimeError("yahoo down")):
+        resp = client.post("/watchlist", json={"symbol": "AAPL", "type": "stock"},
+                           headers=WL_HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "added"
 
 
 def test_watchlist_delete_is_scoped_to_the_caller():
