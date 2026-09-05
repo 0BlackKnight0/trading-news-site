@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from database import add_to_watchlist, get_watchlist, remove_from_watchlist
+from database import add_to_watchlist, get_watchlist_quotes, remove_from_watchlist
 from identity import current_user
 
 router = APIRouter()
@@ -15,7 +15,7 @@ class WatchlistItem(BaseModel):
 
 @router.get("/watchlist")
 def list_watchlist(user: dict = Depends(current_user)):
-    return get_watchlist(user["id"])
+    return get_watchlist_quotes(user["id"])
 
 
 @router.post("/watchlist")

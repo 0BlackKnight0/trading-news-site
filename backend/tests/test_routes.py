@@ -60,7 +60,7 @@ def test_watchlist_requires_a_device_key():
 
 def test_watchlist_get_is_scoped_to_the_caller():
     _as_watchlist_user("u42")
-    with patch("routes.watchlist.get_watchlist", return_value=[]) as getter:
+    with patch("routes.watchlist.get_watchlist_quotes", return_value=[]) as getter:
         resp = client.get("/watchlist", headers=WL_HEADERS)
     assert resp.status_code == 200
     getter.assert_called_once_with("u42")
@@ -172,3 +172,22 @@ def test_webhook_swallows_handler_errors(monkeypatch):
         resp = client.post("/telegram/webhook", json={"message": {}})
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
+
+def test_watchlist_rows_carry_price_and_as_of():
+    _as_watchlist_user("u42")
+    rows = [{"id": 1, "symbol": "X", "type": "stock", "price": 105.0,
+             "change_pct": 5.0, "as_of": "2026-03-04T00:00:00+00:00"}]
+    with patch("routes.watchlist.get_watchlist_quotes", return_value=rows):
+        body = client.get("/watchlist", headers=WL_HEADERS).json()
+    assert body[0]["price"] == 105.0
+    assert body[0]["as_of"] == "2026-03-04T00:00:00+00:00"
+
+
+def test_watchlist_row_without_history_reports_null_price_not_zero():
+    """A missing price must read as unknown, never as a real value of zero."""
+    _as_watchlist_user("u42")
+    rows = [{"id": 1, "symbol": "NEW", "type": "stock", "price": None,
+             "change_pct": None, "as_of": None}]
+    with patch("routes.watchlist.get_watchlist_quotes", return_value=rows):
+        body = client.get("/watchlist", headers=WL_HEADERS).json()
+    assert body[0]["price"] is None

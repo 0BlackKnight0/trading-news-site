@@ -22,6 +22,9 @@ export interface WatchlistItem {
   symbol: string;
   type: "stock" | "crypto" | "forex";
   added_at: string;
+  price: number | null;
+  change_pct: number | null;
+  as_of: string | null;
 }
 
 // Derived utility types — use these instead of repeating the unions

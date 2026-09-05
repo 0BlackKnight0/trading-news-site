@@ -240,3 +240,24 @@ def set_last_seen(user_id: str) -> str:
         {"user_id": user_id, "last_seen_at": stamp}, on_conflict="user_id"
     ).execute()
     return stamp
+
+
+def get_watchlist_quotes(user_id: str) -> list[dict]:
+    """Watchlist rows enriched with the latest stored price.
+
+    Prices come from `price_snapshots`, not from a live fetch, so the row can
+    always state honestly how old the number is. Symbols with no history yet
+    report None rather than zero — unknown is not the same as worthless.
+    """
+    rows = get_watchlist(user_id)
+    enriched = []
+    for row in rows:
+        bars = get_snapshots(row["symbol"], limit=2)
+        price = change_pct = as_of = None
+        if bars:
+            price = bars[-1].close
+            as_of = bars[-1].ts
+            if len(bars) == 2 and bars[0].close:
+                change_pct = (bars[-1].close / bars[0].close - 1) * 100
+        enriched.append({**row, "price": price, "change_pct": change_pct, "as_of": as_of})
+    return enriched
