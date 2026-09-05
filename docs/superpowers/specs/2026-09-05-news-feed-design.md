@@ -207,9 +207,22 @@ Both phases write through `insert_news`, which already upserts on
 `url` — so the same article arriving from both a category feed and a symbol
 lookup collapses to one row.
 
-**Ambiguity resolved:** when an article arrives from both paths, the symbol-
-tagged version wins — `insert_news` updates `symbol` when the incoming row has
-one and the stored row does not.
+**Ambiguity resolved — and it requires a code change.** `insert_news` currently
+upserts with `ignore_duplicates=True`, so a second arrival of the same url is
+discarded entirely. That is correct for the category path (nothing new to
+learn) but wrong for the symbol path: an article first seen via a category
+feed would never gain its `symbol` tag.
+
+The resolution is NOT to flip `ignore_duplicates` — that would let a
+category-path arrival overwrite a good `symbol` with NULL. Instead the symbol
+phase performs a targeted follow-up update after its upsert:
+
+```sql
+UPDATE news_cache SET symbol = <sym> WHERE url = <url> AND symbol IS NULL
+```
+
+So a tag is only ever added, never cleared, and the category path keeps its
+cheap ignore-on-conflict behaviour.
 
 ---
 
