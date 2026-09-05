@@ -87,7 +87,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse" />
-            <h1 className="text-[13px] font-semibold text-white tracking-tight">Market Intelligence</h1>
+            <h1 className="text-[13px] font-semibold text-white tracking-tight">Since</h1>
           </div>
           <button
             onClick={onClose}

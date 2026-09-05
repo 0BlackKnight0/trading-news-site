@@ -9,8 +9,8 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Market Intelligence",
-  description: "Personal trading news and market data dashboard",
+  title: "Since",
+  description: "What changed since you last checked",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
