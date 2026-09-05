@@ -12,9 +12,17 @@ export interface NewsItem {
   title: string;
   url: string;
   source: string;
-  category: "trading" | "tech" | "energy";
+  category: "trading" | "tech" | "energy" | null;
   published_at: string | null;
   summary?: string | null;
+  symbol: string | null;
+  score: number;
+}
+
+export interface SymbolNewsResponse {
+  items: NewsItem[];
+  unread_count: number;
+  news_last_seen_at: string;
 }
 
 export interface WatchlistItem {
@@ -28,7 +36,7 @@ export interface WatchlistItem {
 }
 
 // Derived utility types — use these instead of repeating the unions
-export type NewsCategory = NewsItem["category"];     // "trading" | "tech" | "energy"
+export type NewsCategory = "trading" | "tech" | "energy";
 export type WatchlistType = WatchlistItem["type"];   // "stock" | "crypto" | "forex"
 
 export interface SearchResult {
