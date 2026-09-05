@@ -9,11 +9,13 @@ on-read refresh is harmless and the work is resumable after a timeout.
 """
 import logging
 
-from aggregator.yahoo import fetch_bars
+from aggregator.yahoo import fetch_bars, fetch_symbol_name
 from database import (
     get_snapshots,
+    get_symbol_names,
     upsert_events,
     upsert_snapshots,
+    upsert_symbol_name,
     upsert_symbol_stats,
 )
 from signals.detect import detect
@@ -48,8 +50,26 @@ def refresh_symbol(symbol: str, min_move_pct: float | None = None) -> dict:
     return {"symbol": symbol, "bars": len(bars), "events": len(events)}
 
 
+def _ensure_symbol_names(symbols: list[str]) -> None:
+    """Store a display name for any symbol that doesn't have one yet.
+
+    News-to-symbol matching needs a company name ("Reliance", not
+    "RELIANCE.NS") — see aggregator/matching.py. Names essentially never
+    change, so this only costs a Yahoo call the first time a symbol is seen,
+    not on every refresh.
+    """
+    existing = get_symbol_names()
+    for symbol in symbols:
+        if symbol in existing:
+            continue
+        name = fetch_symbol_name(symbol)
+        if name:
+            upsert_symbol_name(symbol, name)
+
+
 def refresh_all(symbols: list[str]) -> dict:
     """Refresh many symbols. One failure never stops the rest."""
+    _ensure_symbol_names(symbols)
     ok, total_events = 0, 0
     for symbol in symbols:
         try:

@@ -148,3 +148,43 @@ def test_news_refresh_still_prunes_news():
         import aggregator_loop
         aggregator_loop.run_news_refresh()
     prune.assert_called_once()
+
+
+# --- Company names, needed to match news articles to symbols ---------------
+
+def test_refresh_all_fetches_a_name_for_a_symbol_that_has_none():
+    with patch("pipeline.get_symbol_names", return_value={}), \
+         patch("pipeline.fetch_symbol_name", return_value="Reliance Industries Limited") as fetch_name, \
+         patch("pipeline.upsert_symbol_name") as upsert_name, \
+         patch("pipeline.fetch_bars", return_value=[]), \
+         patch("pipeline.upsert_snapshots"), \
+         patch("pipeline.get_snapshots", return_value=[]):
+        import pipeline
+        pipeline.refresh_all(["RELIANCE.NS"])
+    fetch_name.assert_called_once_with("RELIANCE.NS")
+    upsert_name.assert_called_once_with("RELIANCE.NS", "Reliance Industries Limited")
+
+
+def test_refresh_all_skips_a_symbol_that_already_has_a_name():
+    with patch("pipeline.get_symbol_names", return_value={"AAPL": "Apple Inc."}), \
+         patch("pipeline.fetch_symbol_name") as fetch_name, \
+         patch("pipeline.upsert_symbol_name") as upsert_name, \
+         patch("pipeline.fetch_bars", return_value=[]), \
+         patch("pipeline.upsert_snapshots"), \
+         patch("pipeline.get_snapshots", return_value=[]):
+        import pipeline
+        pipeline.refresh_all(["AAPL"])
+    fetch_name.assert_not_called()
+    upsert_name.assert_not_called()
+
+
+def test_refresh_all_does_not_store_a_name_when_yahoo_returns_none():
+    with patch("pipeline.get_symbol_names", return_value={}), \
+         patch("pipeline.fetch_symbol_name", return_value=None), \
+         patch("pipeline.upsert_symbol_name") as upsert_name, \
+         patch("pipeline.fetch_bars", return_value=[]), \
+         patch("pipeline.upsert_snapshots"), \
+         patch("pipeline.get_snapshots", return_value=[]):
+        import pipeline
+        pipeline.refresh_all(["BADSYM"])
+    upsert_name.assert_not_called()
