@@ -58,3 +58,70 @@ def test_dedupe_keeps_items_with_no_url_distinct():
     a = {"title": "A", "url": "", "source": "S", "category": "trading", "published_at": None}
     b = {"title": "B", "url": "", "source": "S", "category": "trading", "published_at": None}
     assert _dedupe([a, b]) == [a, b]
+
+
+# --- Relevance filtering and source denial ---------------------------------
+
+from aggregator.news import RSS_FEEDS, _is_denied_source, _is_relevant
+
+
+def test_trading_relevance_is_unchanged():
+    assert _is_relevant("Sensex rallies 500 points as RBI holds rates", "trading")
+    assert not _is_relevant("Actor takes oath as chief minister", "trading")
+
+
+def test_tech_accepts_real_ai_news():
+    assert _is_relevant("OpenAI ships a new reasoning model", "tech")
+    assert _is_relevant("Nvidia GPU supply tightens for datacenter buildouts", "tech")
+
+
+def test_tech_rejects_entertainment():
+    """Observed in production: Comic Book Movie matched the 'AI' keyword query."""
+    assert not _is_relevant("Marvel reveals the trailer for its next film", "tech")
+    assert not _is_relevant("Box office: sequel tops the weekend", "tech")
+
+
+def test_energy_accepts_real_energy_news():
+    assert _is_relevant("OPEC signals output cut as Brent slips", "energy")
+    assert _is_relevant("Gigawatt-scale battery storage project approved", "energy")
+
+
+def test_energy_rejects_car_auctions():
+    """Observed in production: a car auction site matched the energy query."""
+    assert not _is_relevant("This classic car is up for auction this week", "energy")
+
+
+def test_unknown_category_accepts_everything():
+    """A category with no lists configured must not silently drop all news."""
+    assert _is_relevant("Anything at all", "unknown-category")
+
+
+def test_denied_sources_are_rejected_case_insensitively():
+    for bad in ["Bringatrailer.com", "naturalnews.com", "CBM (Comic Book Movie)",
+                "Wattsupwiththat.com", "Deadline"]:
+        assert _is_denied_source(bad), bad
+
+
+def test_legitimate_sources_are_not_denied():
+    for good in ["Economic Times", "Reuters", "MIT Tech Review", "OilPrice.com",
+                 "CleanTechnica", "Business Standard"]:
+        assert not _is_denied_source(good), good
+
+
+def test_empty_source_is_not_denied():
+    assert not _is_denied_source("")
+
+
+def test_dead_feeds_are_gone():
+    """These four were verified dead or blocking on 2026-09-05."""
+    urls = [u for feeds in RSS_FEEDS.values() for u, _ in feeds]
+    for dead in ["feeds.reuters.com/reuters/businessNews",
+                 "feeds.reuters.com/reuters/energyNews",
+                 "moneycontrol.com/rss/business.xml",
+                 "venturebeat.com/category/ai/feed/"]:
+        assert not any(dead in u for u in urls), dead
+
+
+def test_every_category_still_has_at_least_one_feed():
+    for category, feeds in RSS_FEEDS.items():
+        assert len(feeds) >= 1, category

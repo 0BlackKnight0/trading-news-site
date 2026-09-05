@@ -7,21 +7,21 @@ import requests
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
+# Four feeds were removed on 2026-09-05 after being verified dead or blocking:
+# both feeds.reuters.com endpoints (domain no longer resolves), Moneycontrol
+# (403 against our User-Agent) and VentureBeat (429). Curating replacements is
+# a research task, not an engineering one — see the spec's "out of scope".
 RSS_FEEDS = {
     "trading": [
         ("https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms", "Economic Times"),
-        ("https://www.moneycontrol.com/rss/business.xml", "Moneycontrol"),
-        ("https://feeds.reuters.com/reuters/businessNews", "Reuters Markets"),
     ],
     "tech": [
         ("https://techcrunch.com/category/artificial-intelligence/feed/", "TechCrunch AI"),
-        ("https://venturebeat.com/category/ai/feed/", "VentureBeat AI"),
         ("https://www.technologyreview.com/feed/", "MIT Tech Review"),
         ("https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "The Verge AI"),
         ("https://www.scmp.com/rss/4/feed", "SCMP Tech"),
     ],
     "energy": [
-        ("https://feeds.reuters.com/reuters/energyNews", "Reuters Energy"),
         ("https://oilprice.com/rss/main", "OilPrice.com"),
         ("https://cleantechnica.com/feed/", "CleanTechnica"),
     ],
@@ -79,12 +79,74 @@ def _clean_html(text: str) -> str:
     return ' '.join(text.split())[:240]
 
 
-def _is_trading_relevant(title: str) -> bool:
+_TECH_BLOCK = [
+    "comic", "marvel", "dc studios", "box office", "trailer for",
+    "casting", "celebrity", "film release", "movie release",
+    "tv series", "episode", "season finale", "horoscope",
+]
+
+_TECH_ALLOW = [
+    "ai", "artificial intelligence", "llm", "language model", "openai",
+    "anthropic", "chatgpt", "claude", "gemini", "deepseek", "qwen", "llama",
+    "mistral", "copilot", "nvidia", "gpu", "chip", "semiconductor",
+    "datacenter", "data center", "machine learning", "neural", "transformer",
+    "inference", "training run", "agent", "robotics", "quantum", "cloud",
+    "software", "startup", "funding round", "acquisition", "algorithm",
+    "compute", "silicon", "model release",
+]
+
+_ENERGY_BLOCK = [
+    "auction", "for sale", "classic car", "bring a trailer",
+    "horoscope", "recipe", "celebrity", "film release", "box office",
+]
+
+_ENERGY_ALLOW = [
+    "oil", "crude", "brent", "wti", "opec", "natural gas", "lng", "pipeline",
+    "refinery", "barrel", "energy", "power grid", "electricity", "megawatt",
+    "gigawatt", "solar", "wind farm", "nuclear", "reactor", "battery",
+    "storage", "renewable", "coal", "utility", "emissions", "carbon",
+    "hydrogen", "drilling", "fuel", "grid",
+]
+
+# category -> (block list, allow list). A category absent from this map is
+# unfiltered: better to let news through than to silently drop a whole
+# category because someone added it without lists.
+_CATEGORY_FILTERS = {
+    "trading": (_TRADING_BLOCK, _TRADING_ALLOW),
+    "tech": (_TECH_BLOCK, _TECH_ALLOW),
+    "energy": (_ENERGY_BLOCK, _ENERGY_ALLOW),
+}
+
+# Sources NewsAPI keeps surfacing that never carry market news. Matched on the
+# article's source NAME, not its url, because that is what the API returns.
+_SOURCE_DENYLIST = [
+    "naturalnews", "wattsupwiththat", "bringatrailer", "dailymail",
+    "comic book movie", "deadline", "newsonjapan",
+]
+
+
+def _is_denied_source(source: str) -> bool:
+    lower = (source or "").lower()
+    return any(bad in lower for bad in _SOURCE_DENYLIST)
+
+
+def _is_relevant(title: str, category: str) -> bool:
+    """Keyword relevance for one category.
+
+    Previously this existed for `trading` only, which is why a car auction
+    site and an entertainment blog reached the energy and tech feeds in
+    production — NewsAPI keyword-matches across ~150k sources and does exactly
+    what a broad query asks.
+    """
+    filters = _CATEGORY_FILTERS.get(category)
+    if not filters:
+        return True
+    block, allow = filters
     lower = title.lower()
-    for term in _TRADING_BLOCK:
+    for term in block:
         if term in lower:
             return False
-    for term in _TRADING_ALLOW:
+    for term in allow:
         if term in lower:
             return True
     return False
@@ -104,7 +166,7 @@ def parse_rss(url: str, category: str, source: str) -> list[dict]:
             title = getattr(entry, "title", "") or ""
             if not title:
                 continue
-            if category == "trading" and not _is_trading_relevant(title):
+            if not _is_relevant(title, category):
                 continue
             url_ = getattr(entry, "link", "") or ""
             raw = (getattr(entry, "summary", "") or getattr(entry, "description", "") or "")
@@ -139,13 +201,16 @@ def fetch_newsapi(category: str) -> list[dict]:
             title = a.get("title", "") or ""
             if not title or "[Removed]" in title:
                 continue
-            if category == "trading" and not _is_trading_relevant(title):
+            source_name = a["source"]["name"]
+            if _is_denied_source(source_name):
+                continue
+            if not _is_relevant(title, category):
                 continue
             desc = _clean_html(a.get("description", "") or "") or None
             results.append({
                 "title": title,
                 "url": a["url"],
-                "source": a["source"]["name"],
+                "source": source_name,
                 "category": category,
                 "published_at": a.get("publishedAt"),
                 "summary": desc,
