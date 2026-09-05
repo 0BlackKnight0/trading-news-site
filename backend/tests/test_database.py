@@ -161,3 +161,38 @@ def test_prune_news_deletes_older_than_the_window():
         database.prune_news(days=30)
     table.delete.assert_called_once()
     assert table.delete.return_value.lt.call_args[0][0] == "published_at"
+
+
+def test_tag_news_symbol_only_fills_an_empty_tag():
+    """insert_news ignores duplicate urls, so an article first seen via a
+    category feed would never gain its symbol. This adds the tag without ever
+    letting a later category-path arrival clear it."""
+    table = MagicMock()
+    with patch("database.get_client") as client:
+        client.return_value.table.return_value = table
+        database.tag_news_symbol("http://ex.com/1", "AAPL")
+    update = table.update
+    update.assert_called_once_with({"symbol": "AAPL"})
+    assert update.return_value.eq.call_args[0] == ("url", "http://ex.com/1")
+    update.return_value.eq.return_value.is_.assert_called_once_with("symbol", "null")
+
+
+def test_get_symbol_news_is_a_noop_without_symbols():
+    with patch("database.get_client") as client:
+        assert database.get_symbol_news([]) == []
+    client.assert_not_called()
+
+
+def test_count_news_since_is_a_noop_without_symbols():
+    with patch("database.get_client") as client:
+        assert database.count_news_since([], "2026-01-01T00:00:00+00:00") == 0
+    client.assert_not_called()
+
+
+def test_set_news_last_seen_upserts_on_user_id():
+    table = MagicMock()
+    with patch("database.get_client") as client:
+        client.return_value.table.return_value = table
+        stamp = database.set_news_last_seen("u1")
+    assert table.upsert.call_args[1]["on_conflict"] == "user_id"
+    assert table.upsert.call_args[0][0]["news_last_seen_at"] == stamp

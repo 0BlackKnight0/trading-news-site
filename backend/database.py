@@ -322,3 +322,72 @@ def get_watchlist_quotes(user_id: str) -> list[dict]:
                 change_pct = (bars[-1].close / bars[0].close - 1) * 100
         enriched.append({**row, "price": price, "change_pct": change_pct, "as_of": as_of})
     return enriched
+
+
+# --- Symbol news ---------------------------------------------------------
+
+def tag_news_symbol(url: str, symbol: str) -> None:
+    """Attach a symbol to an already-stored article, add-only.
+
+    insert_news upserts with ignore_duplicates=True, so an article that first
+    arrived through a category feed keeps its original row and never learns
+    its symbol. The `is_("symbol", "null")` guard means a tag is only ever
+    added, never overwritten by a later category-path arrival.
+    """
+    try:
+        (get_client().table("news_cache")
+         .update({"symbol": symbol})
+         .eq("url", url)
+         .is_("symbol", "null")
+         .execute())
+    except Exception as e:
+        logger.error(f"tag_news_symbol({url}, {symbol}) failed: {e}")
+
+
+def get_symbol_news(symbols: list[str], limit: int = 30) -> list[dict]:
+    """Articles tagged with any of `symbols`, newest first.
+
+    Recency beats score here: for your own holdings, the latest story matters
+    more than a ranking heuristic.
+    """
+    if not symbols:
+        return []
+    res = (get_client().table("news_cache")
+           .select("*")
+           .in_("symbol", symbols)
+           .order("published_at", desc=True, nullsfirst=False)
+           .limit(limit)
+           .execute())
+    return res.data or []
+
+
+def count_news_since(symbols: list[str], ts: str) -> int:
+    """Symbol articles published after `ts` — the news unread count.
+
+    Counted on published_at, not created_at: unlike detector events, an
+    article's publish time is genuine and does not shift on re-fetch.
+    """
+    if not symbols:
+        return 0
+    res = (get_client().table("news_cache")
+           .select("id", count="exact")
+           .in_("symbol", symbols)
+           .gt("published_at", ts)
+           .execute())
+    return res.count or 0
+
+
+def get_news_last_seen(user_id: str) -> str:
+    res = (get_client().table("user_state")
+           .select("news_last_seen_at").eq("user_id", user_id).limit(1).execute())
+    if res.data and res.data[0].get("news_last_seen_at"):
+        return res.data[0]["news_last_seen_at"]
+    return _now_iso()
+
+
+def set_news_last_seen(user_id: str) -> str:
+    stamp = _now_iso()
+    get_client().table("user_state").upsert(
+        {"user_id": user_id, "news_last_seen_at": stamp}, on_conflict="user_id"
+    ).execute()
+    return stamp
