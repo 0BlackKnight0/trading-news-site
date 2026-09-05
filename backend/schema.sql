@@ -114,3 +114,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS watchlist_user_symbol_idx ON watchlist (user_i
 -- news_cache: replace the Python-side title dedupe with a real constraint.
 DELETE FROM news_cache a USING news_cache b WHERE a.id > b.id AND a.url = b.url;
 CREATE UNIQUE INDEX IF NOT EXISTS news_cache_url_idx ON news_cache (url);
+
+-- ===== Improved news feed =====
+
+-- Symbol news rows carry `symbol` and leave `category` NULL. Category news
+-- rows are the reverse. That is what keeps get_news and get_symbol_news from
+-- returning each other's rows.
+ALTER TABLE news_cache ADD COLUMN IF NOT EXISTS symbol TEXT;
+ALTER TABLE news_cache ADD COLUMN IF NOT EXISTS score  INT NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS news_cache_symbol_idx
+  ON news_cache (symbol, published_at DESC);
+CREATE INDEX IF NOT EXISTS news_cache_ranked_idx
+  ON news_cache (category, score DESC, published_at DESC);
+
+-- News and Changes track "since you last looked" separately: catching up on
+-- news must not silently mark a RANGE_BREAK as read.
+ALTER TABLE user_state
+  ADD COLUMN IF NOT EXISTS news_last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- Retention. Repeated by prune_news() on every refresh; this seeds it.
+DELETE FROM news_cache WHERE published_at < now() - INTERVAL '30 days';
