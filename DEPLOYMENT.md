@@ -36,7 +36,7 @@ idempotent, so it is safe to run against the existing database. It adds:
    | `SUPABASE_KEY` | yes | |
    | `NEWSAPI_KEY` | no | RSS feeds still work without it |
    | `TELEGRAM_BOT_TOKEN` | no | digest + webhook are skipped if unset |
-   | `CRON_SECRET` | yes | random 16+ char string; Vercel sends it as `Authorization: Bearer <value>` on cron runs. **Without it `/cron/daily` returns 401 to everyone**, including Vercel |
+   | `CRON_SECRET` | yes | random 16+ char string; Vercel sends it as `Authorization: Bearer <value>` on cron runs. **Without it `/cron/daily` AND `/admin/refresh` return 401 to everyone**, including Vercel |
    | `TELEGRAM_WEBHOOK_SECRET` | no | if set, must match `secret_token` in `setWebhook` |
    | `CORS_ORIGINS` | no | defaults to `*`; set to the frontend URL once you have it |
 
@@ -111,3 +111,34 @@ refresh fetched.
   opening URLs itself with no timeout, which could stall a request.
 - `backend/Procfile` and `backend/railway.toml` still work if you ever move the
   API to a persistent host.
+
+---
+
+## Gotchas that cost time (learned the hard way)
+
+- **Do not set `TZ`.** Vercel reserves the name and rejects it. Nothing in the
+  code reads it — it is a leftover from the APScheduler build, which no longer
+  exists. Serverless runs UTC regardless.
+- **Environment variables only reach a deployment that is built after they are
+  saved.** Adding them in Settings does nothing to the running deployment. Add,
+  then **Deployments → ⋯ → Redeploy** with the build cache **off**. Symptom of
+  forgetting: `/health` returns 200, the Yahoo routes (`/search`, `/ticker`)
+  return 200, and every Supabase route returns 500 while `/admin/refresh`
+  returns 401.
+- **In the current Vercel UI, environment variables live under
+  Settings → Environments → Production**, not a top-level "Environment
+  Variables" page.
+- **Root Directory is the step that breaks builds.** Vercel defaults to the repo
+  root, which contains no app. Set it explicitly to `backend` or `frontend`. If
+  a project ends up named after the repo, that is the tell that Root Directory
+  was left at the default.
+- **`NEXT_PUBLIC_API_URL` is compiled into the JS bundle.** Changing it requires
+  a rebuild, not a restart. Verify what actually shipped by grepping the
+  deployed chunks for the URL.
+- **Supabase: leave RLS off, or the app reads nothing.** The schema creates
+  tables with no policies. Enabling RLS without writing policies makes every
+  query silently return empty — it fails quiet, not loud. The key is only ever
+  server-side, so this is an accepted trade, not an oversight. Choose
+  "Run without RLS" when the SQL editor prompts.
+- **The newer `sb_publishable_*` key format works** with supabase-py 2.31.0;
+  the older JWT-style anon key is not required.
