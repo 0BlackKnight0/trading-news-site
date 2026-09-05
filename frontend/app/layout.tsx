@@ -9,8 +9,8 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Since",
-  description: "What changed since you last checked",
+  title: "Market Dashboard",
+  description: "Personal trading news and market data dashboard",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

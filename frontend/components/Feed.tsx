@@ -101,7 +101,6 @@ export function Feed({ onToggleSidebar, embedded = false }: { onToggleSidebar?: 
           <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
           <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
         </button>
-        <h1 className="text-[15px] font-semibold text-white tracking-tight">Since</h1>
         {unread > 0 && (
           <span className="text-[10px] font-semibold text-[#ff5530] bg-[#ff5530]/10 border border-[#ff5530]/20 rounded-full px-2 py-0.5">
             {unread} new

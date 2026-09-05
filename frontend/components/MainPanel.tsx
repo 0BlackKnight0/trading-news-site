@@ -32,9 +32,7 @@ export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
           <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
           <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
         </button>
-        <h1 className="text-[15px] font-semibold text-white tracking-tight">Since</h1>
-
-        <nav className="flex gap-1 ml-4" role="tablist">
+        <nav className="flex gap-1" role="tablist">
           {(["news", "changes"] as const).map((key) => (
             <button
               key={key}
