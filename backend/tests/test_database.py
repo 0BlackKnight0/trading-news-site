@@ -196,3 +196,36 @@ def test_set_news_last_seen_upserts_on_user_id():
         stamp = database.set_news_last_seen("u1")
     assert table.upsert.call_args[1]["on_conflict"] == "user_id"
     assert table.upsert.call_args[0][0]["news_last_seen_at"] == stamp
+
+
+def test_upsert_symbol_name_upserts_on_symbol():
+    table = MagicMock()
+    with patch("database.get_client") as client:
+        client.return_value.table.return_value = table
+        database.upsert_symbol_name("INFY.NS", "Infosys Limited")
+    assert table.upsert.call_args[0][0] == {"symbol": "INFY.NS", "name": "Infosys Limited"}
+    assert table.upsert.call_args[1]["on_conflict"] == "symbol"
+
+
+def test_upsert_symbol_name_swallows_exceptions():
+    with patch("database.get_client") as client:
+        client.return_value.table.side_effect = RuntimeError("db down")
+        database.upsert_symbol_name("INFY.NS", "Infosys Limited")  # must not raise
+
+
+def test_get_symbol_names_skips_rows_with_no_name():
+    rows = [
+        {"symbol": "INFY.NS", "name": "Infosys Limited"},
+        {"symbol": "TCS.NS", "name": None},
+        {"symbol": "AAPL", "name": ""},
+    ]
+    with patch("database.get_client") as client:
+        client.return_value.table.return_value.select.return_value.execute.return_value = MagicMock(data=rows)
+        names = database.get_symbol_names()
+    assert names == {"INFY.NS": "Infosys Limited"}
+
+
+def test_get_symbol_names_swallows_exceptions():
+    with patch("database.get_client") as client:
+        client.return_value.table.side_effect = RuntimeError("db down")
+        assert database.get_symbol_names() == {}

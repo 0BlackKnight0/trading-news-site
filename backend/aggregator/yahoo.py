@@ -153,3 +153,13 @@ def fetch_bars(symbol: str, range_: str = "3mo") -> list[Bar]:
     except Exception as e:
         logger.error(f"bar parse failed for {symbol}: {e}")
         return []
+
+
+def fetch_symbol_name(symbol: str) -> str | None:
+    """The company's display name from chart metadata, or None."""
+    try:
+        meta = fetch_chart(symbol).get("meta") or {}
+        return meta.get("longName") or meta.get("shortName") or None
+    except Exception as e:
+        logger.error(f"name fetch failed for {symbol}: {e}")
+        return None

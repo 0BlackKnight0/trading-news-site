@@ -391,3 +391,19 @@ def set_news_last_seen(user_id: str) -> str:
         {"user_id": user_id, "news_last_seen_at": stamp}, on_conflict="user_id"
     ).execute()
     return stamp
+
+def upsert_symbol_name(symbol: str, name: str) -> None:
+    try:
+        get_client().table("symbol_stats").upsert(
+            {"symbol": symbol, "name": name}, on_conflict="symbol"
+        ).execute()
+    except Exception as e:
+        logger.error(f"upsert_symbol_name({symbol}) failed: {e}")
+
+def get_symbol_names() -> dict[str, str]:
+    try:
+        res = get_client().table("symbol_stats").select("symbol, name").execute()
+        return {row["symbol"]: row["name"] for row in res.data if row.get("name")}
+    except Exception as e:
+        logger.error(f"get_symbol_names failed: {e}")
+        return {}

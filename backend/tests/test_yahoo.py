@@ -119,3 +119,32 @@ def test_fetch_bars_returns_empty_when_timestamp_has_null(monkeypatch):
     )
     monkeypatch.setattr(yahoo, "fetch_chart", lambda *a, **k: chart)
     assert fetch_bars("BADSYM") == []
+
+
+# --- fetch_symbol_name ------------------------------------------------------
+
+from aggregator.yahoo import fetch_symbol_name
+
+
+def test_fetch_symbol_name_returns_long_name(monkeypatch):
+    chart = {"meta": {"longName": "Infosys Limited", "shortName": "INFY"}}
+    monkeypatch.setattr(yahoo, "fetch_chart", lambda *a, **k: chart)
+    assert fetch_symbol_name("INFY.NS") == "Infosys Limited"
+
+
+def test_fetch_symbol_name_falls_back_to_short_name(monkeypatch):
+    chart = {"meta": {"shortName": "INFY"}}
+    monkeypatch.setattr(yahoo, "fetch_chart", lambda *a, **k: chart)
+    assert fetch_symbol_name("INFY.NS") == "INFY"
+
+
+def test_fetch_symbol_name_returns_none_for_empty_chart(monkeypatch):
+    monkeypatch.setattr(yahoo, "fetch_chart", lambda *a, **k: {})
+    assert fetch_symbol_name("BADSYM") is None
+
+
+def test_fetch_symbol_name_returns_none_on_exception(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(yahoo, "fetch_chart", boom)
+    assert fetch_symbol_name("BADSYM") is None

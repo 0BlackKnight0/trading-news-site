@@ -135,3 +135,7 @@ ALTER TABLE user_state
 
 -- Retention. Repeated by prune_news() on every refresh; this seeds it.
 DELETE FROM news_cache WHERE published_at < now() - INTERVAL '30 days';
+
+-- Company name per symbol, used to match news articles to watchlist symbols.
+-- Articles say "Infosys", not "INFY.NS".
+ALTER TABLE symbol_stats ADD COLUMN IF NOT EXISTS name TEXT;
