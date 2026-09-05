@@ -7,10 +7,12 @@ refreshes inline when it has gone stale.
 """
 import logging
 import time
+from datetime import datetime, timezone
 
 from aggregator.market import fetch_all as fetch_all_market
 from aggregator.matching import aliases_for, match_symbols
 from aggregator.news import fetch_all_news
+from aggregator.ranking import apply_scores
 from database import (
     get_all_watched_symbols,
     get_symbol_names,
@@ -22,6 +24,10 @@ from database import (
     upsert_market,
 )
 from pipeline import refresh_all
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +85,9 @@ def _tag_matched_articles(items: list[dict]) -> None:
 
 def run_news_refresh():
     items = fetch_all_news()
-    insert_news(items)
-    _tag_matched_articles(items)
+    scored = apply_scores(items, _utc_now_iso())
+    insert_news(scored)
+    _tag_matched_articles(scored)
     prune_news()
     if items:
         _mark("news")

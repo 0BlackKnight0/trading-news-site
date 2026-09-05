@@ -70,11 +70,13 @@ def insert_news(items: list[dict]):
         logger.error(f"insert_news failed: {e}")
 
 def get_news(category: str) -> list[dict]:
-    # nullsfirst=False matters: Postgres orders DESC as NULLS FIRST by
-    # default, so an article with no published_at outranks today's news.
+    # score first, then recency. nullsfirst=False matters: Postgres orders
+    # DESC as NULLS FIRST by default, so an undated article would outrank
+    # today's news.
     res = (get_client().table("news_cache")
            .select("*")
            .eq("category", category)
+           .order("score", desc=True)
            .order("published_at", desc=True, nullsfirst=False)
            .limit(20)
            .execute())

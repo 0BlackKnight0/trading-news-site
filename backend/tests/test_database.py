@@ -149,9 +149,9 @@ def test_get_news_orders_undated_articles_last():
     above genuinely fresh articles and can fill the whole 20-row window."""
     with patch("database.get_client") as client:
         chain = client.return_value.table.return_value.select.return_value.eq.return_value
-        chain.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        chain.order.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
         database.get_news("trading")
-    assert chain.order.call_args[1]["nullsfirst"] is False
+    assert chain.order.return_value.order.call_args[1]["nullsfirst"] is False
 
 
 def test_prune_news_deletes_older_than_the_window():
@@ -229,3 +229,14 @@ def test_get_symbol_names_swallows_exceptions():
     with patch("database.get_client") as client:
         client.return_value.table.side_effect = RuntimeError("db down")
         assert database.get_symbol_names() == {}
+
+
+def test_get_news_ranks_by_score_then_recency():
+    with patch("database.get_client") as client:
+        chain = client.return_value.table.return_value.select.return_value.eq.return_value
+        chain.order.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+        database.get_news("trading")
+    first = chain.order.call_args_list[0]
+    second = chain.order.return_value.order.call_args_list[0]
+    assert first[0][0] == "score" and first[1]["desc"] is True
+    assert second[0][0] == "published_at" and second[1]["nullsfirst"] is False
