@@ -1100,6 +1100,7 @@ Create `backend/tests/test_pipeline.py`:
 # backend/tests/test_pipeline.py
 from unittest.mock import patch
 
+from signals.stats import compute_stats
 from signals.types import Bar
 
 BARS = [
@@ -1142,10 +1143,15 @@ def test_refresh_symbol_is_idempotent_on_dedupe_keys():
 def test_stats_exclude_the_in_progress_bar():
     """The latest bar is incomplete intraday; including it would flatten averages."""
     seen = {}
+
+    def spy(bars):
+        seen["n"] = len(bars)
+        return compute_stats(bars)
+
     with patch("pipeline.fetch_bars", return_value=BARS), \
          patch("pipeline.upsert_snapshots"), \
          patch("pipeline.get_snapshots", return_value=BARS), \
-         patch("pipeline.compute_stats", side_effect=lambda b: seen.update(n=len(b)) or __import__("signals.stats", fromlist=["compute_stats"]).compute_stats(b)), \
+         patch("pipeline.compute_stats", side_effect=spy), \
          patch("pipeline.upsert_symbol_stats"), \
          patch("pipeline.upsert_events", return_value=0):
         import pipeline
