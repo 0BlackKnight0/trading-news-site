@@ -23,6 +23,21 @@ _SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Aliases that are ordinary English words (or otherwise generic enough) that
+# they turn up constantly in financial writing with no connection to the
+# company that happens to share the name. Kept lowercase to match the
+# normalized alias form. Only dropped when a longer, more specific alias
+# survives for the same symbol (see aliases_for) — never dropped down to zero
+# aliases, since no aliases means the symbol can never match anything at all.
+#
+# `apple` is deliberately excluded: in a market-news corpus "Apple" overwhelm-
+# ingly means Apple Inc., so filtering it would cost far more real coverage
+# than it would save in false positives.
+_AMBIGUOUS_ALIASES = frozenset({
+    "reliance", "target", "shell", "gap", "visa", "square", "next",
+    "orange", "unity", "block", "match", "arm", "sea", "era",
+})
+
 
 def _normalize(text: str) -> str:
     return " ".join(text.split()).strip().lower()
@@ -66,6 +81,15 @@ def aliases_for(symbol: str, long_name: str | None) -> list[str]:
         if alias and alias not in seen:
             seen.add(alias)
             unique.append(alias)
+
+    # Drop ambiguous, ordinary-English-word aliases (e.g. bare "reliance")
+    # when a longer, more specific alias survives alongside them. Never drop
+    # down to zero aliases — no aliases means the symbol can never match
+    # anything, which is worse than an occasional false positive.
+    if len(unique) > 1:
+        specific = [a for a in unique if a not in _AMBIGUOUS_ALIASES]
+        if specific:
+            return specific
     return unique
 
 

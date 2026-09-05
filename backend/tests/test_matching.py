@@ -7,8 +7,11 @@ from aggregator.matching import aliases_for, match_symbols
 # --- aliases_for ------------------------------------------------------------
 
 def test_aliases_for_reliance():
+    # Bare "reliance" is an ambiguous, ordinary-English-word alias (see
+    # test_ambiguous_aliases below) and is dropped once the more specific
+    # "reliance industries" alias survives.
     assert aliases_for("RELIANCE.NS", "Reliance Industries Limited") == [
-        "reliance industries", "reliance",
+        "reliance industries",
     ]
 
 
@@ -117,6 +120,49 @@ def test_no_match_returns_empty_list():
 
 
 # --- Purity ------------------------------------------------------------------
+
+# --- Ambiguous aliases (false-positive guard) --------------------------------
+
+def test_reliance_ns_drops_bare_alias_but_keeps_specific_one():
+    assert aliases_for("RELIANCE.NS", "Reliance Industries Limited") == [
+        "reliance industries",
+    ]
+    assert "reliance" not in aliases_for("RELIANCE.NS", "Reliance Industries Limited")
+
+
+def test_real_false_positive_sentence_does_not_match_reliance():
+    alias_map = {
+        "RELIANCE.NS": aliases_for("RELIANCE.NS", "Reliance Industries Limited"),
+    }
+    text = (
+        "China expands currency swap with Egypt as trade ties reach new "
+        "heights. Experts say any reduced reliance on the US dollar will "
+        "not happen overnight."
+    )
+    assert match_symbols(text, alias_map) == []
+
+
+def test_specific_name_mention_still_matches_reliance():
+    alias_map = {
+        "RELIANCE.NS": aliases_for("RELIANCE.NS", "Reliance Industries Limited"),
+    }
+    assert match_symbols("Reliance Industries posts Q2 profit", alias_map) == [
+        "RELIANCE.NS",
+    ]
+
+
+def test_symbol_whose_only_alias_is_ambiguous_keeps_it():
+    # No long name, and the bare ticker itself happens to be an ambiguous
+    # word — dropping it would leave zero aliases, which is worse than an
+    # occasional false positive, so it is kept.
+    assert aliases_for("GAP", None) == ["gap"]
+
+
+def test_apple_alias_is_not_filtered():
+    # Deliberately not in _AMBIGUOUS_ALIASES: "Apple" overwhelmingly means
+    # Apple Inc. in a market-news corpus.
+    assert aliases_for("AAPL", "Apple Inc.") == ["apple", "aapl"]
+
 
 def test_matching_module_imports_nothing_impure():
     """This module must stay pure: no I/O, no clock, no database."""

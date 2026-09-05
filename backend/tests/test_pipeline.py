@@ -80,3 +80,71 @@ def test_refresh_all_continues_past_a_failing_symbol():
         import pipeline
         result = pipeline.refresh_all(["BAD", "GOOD"])
     assert result["symbols"] == 1
+
+
+# --- run_news_refresh: symbol tagging ----------------------------------------
+
+NEWS_ITEMS = [
+    {
+        "title": "Reliance Industries posts Q2 profit",
+        "url": "https://example.com/reliance-q2",
+        "source": "Test Wire",
+        "category": "trading",
+        "published_at": "2026-02-26T00:00:00+00:00",
+        "summary": "Reliance Industries beat estimates this quarter.",
+    },
+    {
+        "title": "China expands currency swap with Egypt",
+        "url": "https://example.com/china-egypt",
+        "source": "Test Wire",
+        "category": "trading",
+        "published_at": "2026-02-26T00:00:00+00:00",
+        "summary": "Trade ties reach new heights amid shifting alliances.",
+    },
+]
+
+
+def test_news_refresh_tags_article_mentioning_watchlist_company():
+    with patch("aggregator_loop.fetch_all_news", return_value=NEWS_ITEMS), \
+         patch("aggregator_loop.insert_news"), \
+         patch("aggregator_loop.prune_news"), \
+         patch("aggregator_loop.get_symbol_names",
+               return_value={"RELIANCE.NS": "Reliance Industries Limited"}), \
+         patch("aggregator_loop.tag_news_symbol") as tag:
+        import aggregator_loop
+        aggregator_loop.run_news_refresh()
+    tag.assert_called_once_with("https://example.com/reliance-q2", "RELIANCE.NS")
+
+
+def test_news_refresh_does_not_tag_article_mentioning_nothing():
+    with patch("aggregator_loop.fetch_all_news", return_value=[NEWS_ITEMS[1]]), \
+         patch("aggregator_loop.insert_news"), \
+         patch("aggregator_loop.prune_news"), \
+         patch("aggregator_loop.get_symbol_names",
+               return_value={"RELIANCE.NS": "Reliance Industries Limited"}), \
+         patch("aggregator_loop.tag_news_symbol") as tag:
+        import aggregator_loop
+        aggregator_loop.run_news_refresh()
+    tag.assert_not_called()
+
+
+def test_news_refresh_skips_tagging_when_no_symbol_names():
+    with patch("aggregator_loop.fetch_all_news", return_value=NEWS_ITEMS), \
+         patch("aggregator_loop.insert_news"), \
+         patch("aggregator_loop.prune_news"), \
+         patch("aggregator_loop.get_symbol_names", return_value={}), \
+         patch("aggregator_loop.tag_news_symbol") as tag:
+        import aggregator_loop
+        aggregator_loop.run_news_refresh()
+    tag.assert_not_called()
+
+
+def test_news_refresh_still_prunes_news():
+    with patch("aggregator_loop.fetch_all_news", return_value=NEWS_ITEMS), \
+         patch("aggregator_loop.insert_news"), \
+         patch("aggregator_loop.prune_news") as prune, \
+         patch("aggregator_loop.get_symbol_names", return_value={}), \
+         patch("aggregator_loop.tag_news_symbol"):
+        import aggregator_loop
+        aggregator_loop.run_news_refresh()
+    prune.assert_called_once()

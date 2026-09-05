@@ -9,13 +9,16 @@ import logging
 import time
 
 from aggregator.market import fetch_all as fetch_all_market
+from aggregator.matching import aliases_for, match_symbols
 from aggregator.news import fetch_all_news
 from database import (
     get_all_watched_symbols,
+    get_symbol_names,
     insert_news,
     mark_refreshed,
     prune_news,
     seconds_since_refresh,
+    tag_news_symbol,
     upsert_market,
 )
 from pipeline import refresh_all
@@ -54,9 +57,30 @@ def run_market_refresh():
     return len(items)
 
 
+def _tag_matched_articles(items: list[dict]) -> None:
+    """Tag each fetched article with any watchlist symbols it mentions."""
+    names = get_symbol_names()
+    if not names:
+        return
+    alias_map = {
+        symbol: aliases for symbol, name in names.items()
+        if (aliases := aliases_for(symbol, name))
+    }
+    if not alias_map:
+        return
+    for article in items:
+        url = article.get("url")
+        if not url:
+            continue
+        text = f"{article.get('title', '')} {article.get('summary') or ''}"
+        for symbol in match_symbols(text, alias_map):
+            tag_news_symbol(url, symbol)
+
+
 def run_news_refresh():
     items = fetch_all_news()
     insert_news(items)
+    _tag_matched_articles(items)
     prune_news()
     if items:
         _mark("news")
