@@ -87,7 +87,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             ✕
           </button>
         </div>
-        <p className="text-[10px] text-[#555] mt-0.5 ml-3.5">Live · Auto-refreshes every 60s</p>
+        {/* The client polls every 60s, but the server serves a cache with a
+            15-minute TTL — and on Hobby the cron runs once a day. Claiming
+            "Live" was the exact dishonesty this rebuild set out to remove;
+            each row states its own age instead. */}
+        <p className="text-[10px] text-[#555] mt-0.5 ml-3.5">Delayed · cached up to 15 min</p>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2 overscroll-contain">
