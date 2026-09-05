@@ -42,3 +42,75 @@ CREATE TABLE IF NOT EXISTS refresh_meta (
   key TEXT PRIMARY KEY,
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ===== The Line (Phase 1) =====
+
+CREATE TABLE IF NOT EXISTS users (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_key  TEXT UNIQUE NOT NULL,
+  sync_code   TEXT UNIQUE,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS price_snapshots (
+  id      BIGSERIAL PRIMARY KEY,
+  symbol  TEXT NOT NULL,
+  ts      TIMESTAMPTZ NOT NULL,
+  open    NUMERIC,
+  high    NUMERIC,
+  low     NUMERIC,
+  close   NUMERIC,
+  volume  BIGINT,
+  source  TEXT NOT NULL DEFAULT 'yahoo',
+  UNIQUE (symbol, ts)
+);
+CREATE INDEX IF NOT EXISTS price_snapshots_symbol_ts_idx
+  ON price_snapshots (symbol, ts DESC);
+
+CREATE TABLE IF NOT EXISTS symbol_stats (
+  symbol           TEXT PRIMARY KEY,
+  avg_daily_range  NUMERIC,
+  avg_volume_20d   BIGINT,
+  vol_30d          NUMERIC,
+  high_52w         NUMERIC,
+  low_52w          NUMERIC,
+  high_20d         NUMERIC,
+  low_20d          NUMERIC,
+  computed_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS events (
+  id           BIGSERIAL PRIMARY KEY,
+  symbol       TEXT NOT NULL,
+  kind         TEXT NOT NULL,
+  occurred_at  TIMESTAMPTZ NOT NULL,
+  severity     SMALLINT NOT NULL DEFAULT 1,
+  payload      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  dedupe_key   TEXT UNIQUE NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS events_occurred_at_idx ON events (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS events_symbol_occurred_idx ON events (symbol, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_state (
+  user_id       UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_symbol_state (
+  user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
+  symbol        TEXT NOT NULL,
+  muted         BOOLEAN NOT NULL DEFAULT false,
+  min_move_pct  NUMERIC,
+  pinned        BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (user_id, symbol)
+);
+
+-- watchlist becomes per-user. The old global UNIQUE(symbol) is replaced.
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE watchlist DROP CONSTRAINT IF EXISTS watchlist_symbol_key;
+CREATE UNIQUE INDEX IF NOT EXISTS watchlist_user_symbol_idx ON watchlist (user_id, symbol);
+
+-- news_cache: replace the Python-side title dedupe with a real constraint.
+DELETE FROM news_cache a USING news_cache b WHERE a.id > b.id AND a.url = b.url;
+CREATE UNIQUE INDEX IF NOT EXISTS news_cache_url_idx ON news_cache (url);

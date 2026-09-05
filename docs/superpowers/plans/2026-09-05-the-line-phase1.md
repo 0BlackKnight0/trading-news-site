@@ -350,8 +350,12 @@ def compute_stats(bars: list[Bar]) -> SymbolStats:
     volumes = [b.volume for b in bars[-VOLUME_WINDOW:] if b.volume is not None]
     avg_volume = _mean([float(v) for v in volumes])
 
+    # Pair consecutive bars from ONE trailing slice. Zipping two separate
+    # negative slices silently pairs the list against itself when the series
+    # is shorter than the window, making every return zero.
+    recent_for_returns = bars[-(RETURN_WINDOW + 1):]
     returns = []
-    for prev, cur in zip(bars[-(RETURN_WINDOW + 1):], bars[-RETURN_WINDOW:]):
+    for prev, cur in zip(recent_for_returns, recent_for_returns[1:]):
         if prev.close:
             returns.append(cur.close / prev.close - 1)
     vol_30d = statistics.pstdev(returns) if len(returns) >= 2 else None
