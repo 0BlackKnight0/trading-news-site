@@ -194,14 +194,28 @@ def upsert_events(events: list[DetectedEvent]) -> int:
     return len(rows)
 
 
-def get_events(before: str | None = None, limit: int = 50) -> list[dict]:
-    """Events newest-first. `before` is a cursor on occurred_at."""
+def get_events(before_ts: str | None = None, before_id: int | None = None, limit: int = 50) -> list[dict]:
+    """Events newest-first, ordered by (occurred_at, id).
+
+    `occurred_at` is a market bar's timestamp, so every symbol on the same
+    exchange session shares the exact same value — ties are the norm, not an
+    edge case. Ordering (and paginating) by `occurred_at` alone lets a strict
+    `.lt(occurred_at)` cursor skip an entire tied group. `id` (BIGSERIAL) is
+    a total order, so (occurred_at, id) breaks ties deterministically.
+
+    `before_ts`/`before_id` together form the cursor: rows strictly before
+    that (occurred_at, id) pair, walking through a tied group rather than
+    jumping over it.
+    """
     query = (get_client().table("events")
              .select("*")
              .order("occurred_at", desc=True)
+             .order("id", desc=True)
              .limit(limit))
-    if before:
-        query = query.lt("occurred_at", before)
+    if before_ts is not None and before_id is not None:
+        query = query.or_(
+            f"occurred_at.lt.{before_ts},and(occurred_at.eq.{before_ts},id.lt.{before_id})"
+        )
     return query.execute().data or []
 
 

@@ -76,7 +76,47 @@ def test_next_cursor_is_set_on_a_full_page():
          patch("routes.feed.get_events", return_value=[EVENT]), \
          patch("routes.feed.count_events_since", return_value=0):
         body = client.get("/feed?limit=1", headers=HEADERS).json()
-    assert body["next_cursor"] == "2026-03-04T10:00:00+00:00"
+    # Repointed for the composite (occurred_at, id) cursor: occurred_at alone
+    # ties across same-session events, so the cursor now carries the event id
+    # too. Was: assert body["next_cursor"] == "2026-03-04T10:00:00+00:00"
+    assert body["next_cursor"] == "2026-03-04T10:00:00+00:00|1"
+
+
+def test_next_cursor_is_the_composite_form():
+    """next_cursor on a full page must carry both occurred_at and id, since
+    occurred_at alone ties across every symbol in the same session's bar."""
+    _as_user()
+    with patch("routes.feed.get_last_seen", return_value="2026-03-01T00:00:00+00:00"), \
+         patch("routes.feed.get_events", return_value=[EVENT]), \
+         patch("routes.feed.count_events_since", return_value=0):
+        body = client.get("/feed?limit=1", headers=HEADERS).json()
+    occurred_at, sep, event_id = body["next_cursor"].rpartition("|")
+    assert sep == "|"
+    assert occurred_at == EVENT["occurred_at"]
+    assert event_id == str(EVENT["id"])
+
+
+def test_cursor_is_parsed_and_forwarded_to_get_events():
+    _as_user()
+    with patch("routes.feed.get_last_seen", return_value="2026-03-01T00:00:00+00:00"), \
+         patch("routes.feed.get_events", return_value=[]) as getter, \
+         patch("routes.feed.count_events_since", return_value=0):
+        client.get(
+            "/feed",
+            params={"cursor": "2026-03-04T10:00:00+00:00|1"},
+            headers=HEADERS,
+        )
+    getter.assert_called_once_with(before_ts="2026-03-04T10:00:00+00:00", before_id=1, limit=50)
+
+
+def test_malformed_cursor_is_treated_as_no_cursor():
+    _as_user()
+    with patch("routes.feed.get_last_seen", return_value="2026-03-01T00:00:00+00:00"), \
+         patch("routes.feed.get_events", return_value=[]) as getter, \
+         patch("routes.feed.count_events_since", return_value=0):
+        resp = client.get("/feed", params={"cursor": "garbage"}, headers=HEADERS)
+    assert resp.status_code == 200
+    getter.assert_called_once_with(before_ts=None, before_id=None, limit=50)
 
 
 def test_catch_up_advances_last_seen():

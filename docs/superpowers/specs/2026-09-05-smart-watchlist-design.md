@@ -273,7 +273,7 @@ unauthenticated — any visitor can add or delete any symbol.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /feed?limit=&cursor=&since=` | Events newest-first, with `unread_count` and `last_seen_at`. `cursor` paginates (opaque, encodes `occurred_at`); `since` optionally overrides the divider baseline, defaulting to the caller's `last_seen_at` |
+| `GET /feed?limit=&cursor=&since=` | Events newest-first, with `unread_count` and `last_seen_at`. `cursor` paginates (opaque, encodes `occurred_at` **and `id`**); `since` optionally overrides the divider baseline, defaulting to the caller's `last_seen_at` |
 | `POST /feed/seen` | Sets `last_seen_at = now()` — the "catch up" action |
 | `GET /history?symbols=&from=&to=` | Snapshot series for sparklines and the scrubber |
 | `GET /watchlist` `POST` `DELETE` | Now user-scoped |
@@ -315,7 +315,12 @@ visible honesty:
 
 - **Detectors are O(1) per symbol** against precomputed `symbol_stats`.
 - **Feed reads are one indexed query per user** on `events (occurred_at DESC)`,
-  cursor-paginated.
+  cursor-paginated on the composite key `(occurred_at, id)`. The composite is
+  required, not defensive: `occurred_at` is a market bar timestamp, so every
+  symbol on the same exchange session shares an identical value — verified
+  against live data, where RELIANCE.NS, TCS.NS and INFY.NS all report
+  `2026-09-04T03:45:00+00:00`. A cursor on `occurred_at` alone would skip an
+  entire tied group whenever a page boundary landed inside one.
 - **Snapshot retention** — one year of daily bars per symbol, pruned on a rolling
   window. Storage per symbol is bounded and small.
 - **Yahoo fetches stay pooled** through the existing `ThreadPoolExecutor`, capped per
