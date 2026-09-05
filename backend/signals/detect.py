@@ -64,7 +64,7 @@ def _big_move(symbol, latest, prev, stats, min_move_pct):
 def _gap(symbol, latest, prev, stats):
     if latest.open is None:
         return None
-    gap = latest.open / prev.close - 1
+    gap = (latest.open - prev.close) / prev.close
     if abs(gap) <= GAP_THRESHOLD:
         return None
     return _event(symbol, "GAP", latest, _severity(abs(gap), 0.03, 0.05), {

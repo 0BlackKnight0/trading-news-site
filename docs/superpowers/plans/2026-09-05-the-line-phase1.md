@@ -660,7 +660,10 @@ def _big_move(symbol, latest, prev, stats, min_move_pct):
 def _gap(symbol, latest, prev, stats):
     if latest.open is None:
         return None
-    gap = latest.open / prev.close - 1
+    # Subtract before dividing, as in _big_move: the divide-then-subtract
+    # form disagrees about which side of the threshold a round-number gap
+    # falls on roughly 0.6% of the time.
+    gap = (latest.open - prev.close) / prev.close
     if abs(gap) <= GAP_THRESHOLD:
         return None
     return _event(symbol, "GAP", latest, _severity(abs(gap), 0.03, 0.05), {
@@ -726,7 +729,7 @@ def detect(
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd backend && ./venv/bin/python -m pytest tests/test_detect.py -q`
-Expected: `24 passed`
+Expected: `25 passed`
 
 - [ ] **Step 5: Run the whole suite to confirm nothing regressed**
 

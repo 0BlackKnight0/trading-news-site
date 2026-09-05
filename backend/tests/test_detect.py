@@ -59,6 +59,16 @@ def test_big_move_needs_both_rules_not_either():
     assert "BIG_MOVE" not in _kinds(events)
 
 
+def test_big_move_fires_when_it_clears_both_rules():
+    # 5% move clears both the 2x volatility rule (2.5x against a 2% average
+    # daily range) AND a 1% user floor, so BIG_MOVE must fire. Unlike
+    # test_big_move_needs_both_rules_not_either (which never reaches the
+    # min_move_pct branch), this pins the positive case: min_move_pct is an
+    # additional floor, not a replacement for the volatility rule.
+    events = detect("X", _bar(105.0), _bar(100.0, ts=PRIOR), BASE, min_move_pct=1.0)
+    assert "BIG_MOVE" in _kinds(events)
+
+
 def test_big_move_skipped_without_range_statistics():
     events = detect("X", _bar(150.0), _bar(100.0, ts=PRIOR), SymbolStats())
     assert "BIG_MOVE" not in _kinds(events)
