@@ -60,3 +60,21 @@ export interface TickerDetail {
   news: TickerNews[];
   error?: string;
 }
+
+export type EventKind = "BIG_MOVE" | "VOLUME_SPIKE" | "RANGE_BREAK" | "GAP";
+
+export interface FeedEvent {
+  id: number;
+  symbol: string;
+  kind: EventKind;
+  occurred_at: string;
+  severity: 1 | 2 | 3;
+  payload: Record<string, string | number>;
+}
+
+export interface FeedResponse {
+  events: FeedEvent[];
+  unread_count: number;
+  last_seen_at: string;
+  next_cursor: string | null;
+}

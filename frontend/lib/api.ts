@@ -1,5 +1,7 @@
 // frontend/lib/api.ts
 import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType, SearchResult, TickerDetail } from "@/types";
+import { getDeviceKey } from "@/lib/deviceKey";
+import { FeedResponse } from "@/types";
 
 // Set NEXT_PUBLIC_API_URL to the deployed API. The localhost fallback is for
 // local dev only — if it leaks into a deployment the failure is at least
@@ -7,7 +9,10 @@ import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType, Sear
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, options);
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: { ...(options?.headers ?? {}), "X-Device-Key": getDeviceKey() },
+  });
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json();
 }
@@ -29,4 +34,8 @@ export const api = {
     fetchJSON<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
   getTickerDetail: (symbol: string, type: WatchlistType) =>
     fetchJSON<TickerDetail>(`/ticker/${symbol}?type=${type}`),
+  getFeed: (cursor?: string) =>
+    fetchJSON<FeedResponse>(`/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
+  markSeen: () =>
+    fetchJSON<{ last_seen_at: string }>("/feed/seen", { method: "POST" }),
 };
