@@ -46,3 +46,50 @@ def test_returns_none_without_meta():
 
 def test_returns_none_when_price_missing():
     assert quote_from_chart(_chart(0, [100.0])) is None
+
+
+# --- Bar extraction -------------------------------------------------------
+
+from aggregator.yahoo import bars_from_chart
+
+
+def _chart_with_series(timestamps, opens, highs, lows, closes, volumes):
+    return {
+        "meta": {"regularMarketPrice": closes[-1], "currency": "INR"},
+        "timestamp": timestamps,
+        "indicators": {"quote": [{
+            "open": opens, "high": highs, "low": lows,
+            "close": closes, "volume": volumes,
+        }]},
+    }
+
+
+def test_bars_from_chart_builds_ascending_bars():
+    chart = _chart_with_series(
+        [1767225600, 1767312000], [100.0, 102.0], [103.0, 105.0],
+        [99.0, 101.0], [102.0, 104.0], [1000, 2000],
+    )
+    bars = bars_from_chart(chart)
+    assert len(bars) == 2
+    assert bars[0].close == 102.0
+    assert bars[1].volume == 2000
+    assert bars[0].ts < bars[1].ts
+
+
+def test_bars_from_chart_drops_rows_with_no_close():
+    """Yahoo pads the series with nulls on non-trading days."""
+    chart = _chart_with_series(
+        [1767225600, 1767312000], [100.0, None], [103.0, None],
+        [99.0, None], [102.0, None], [1000, None],
+    )
+    bars = bars_from_chart(chart)
+    assert len(bars) == 1
+
+
+def test_bars_from_chart_returns_empty_for_an_empty_chart():
+    assert bars_from_chart({}) == []
+
+
+def test_bars_timestamps_are_iso_utc():
+    chart = _chart_with_series([1767225600], [100.0], [103.0], [99.0], [102.0], [1000])
+    assert bars_from_chart(chart)[0].ts.endswith("+00:00")

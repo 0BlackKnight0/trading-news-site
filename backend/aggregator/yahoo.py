@@ -10,6 +10,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
+from datetime import datetime, timezone
+
+from signals.types import Bar
+
 logger = logging.getLogger(__name__)
 
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -103,3 +107,45 @@ def fetch_quotes(symbols: list[str]) -> dict[str, dict]:
             if quote:
                 out[symbol] = quote
     return out
+
+
+def bars_from_chart(chart: dict) -> list[Bar]:
+    """Extract ascending daily bars from a chart result.
+
+    Yahoo pads the series with nulls on non-trading days; those rows are
+    dropped rather than carried forward, so averages are not diluted.
+    """
+    timestamps = chart.get("timestamp") or []
+    quotes = (chart.get("indicators") or {}).get("quote") or [{}]
+    ohlcv = quotes[0] if quotes else {}
+
+    closes = ohlcv.get("close") or []
+    opens = ohlcv.get("open") or []
+    highs = ohlcv.get("high") or []
+    lows = ohlcv.get("low") or []
+    volumes = ohlcv.get("volume") or []
+
+    def at(series, i):
+        return series[i] if i < len(series) else None
+
+    bars = []
+    for i, epoch in enumerate(timestamps):
+        close = at(closes, i)
+        if close is None:
+            continue
+        ts = datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+        volume = at(volumes, i)
+        bars.append(Bar(
+            ts=ts,
+            open=at(opens, i),
+            high=at(highs, i),
+            low=at(lows, i),
+            close=float(close),
+            volume=int(volume) if volume is not None else None,
+        ))
+    return bars
+
+
+def fetch_bars(symbol: str, range_: str = "3mo") -> list[Bar]:
+    """Daily bars for a symbol. Returns [] on any failure."""
+    return bars_from_chart(fetch_chart(symbol, interval="1d", range_=range_))
