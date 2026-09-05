@@ -42,7 +42,7 @@ def refresh_symbol(symbol: str, min_move_pct: float | None = None) -> dict:
     stats = compute_stats(history[:-1])
     upsert_symbol_stats(symbol, stats)
 
-    events = detect(symbol, history[-1], history[-2], stats, min_move_pct)
+    events = detect(symbol, history[-1], history[-2], stats, min_move_pct, history_len=len(history))
     upsert_events(events)
 
     return {"symbol": symbol, "bars": len(bars), "events": len(events)}

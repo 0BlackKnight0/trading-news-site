@@ -120,20 +120,23 @@ def test_cron_runs_refresh_and_digest(monkeypatch):
     monkeypatch.setenv("CRON_SECRET", "s3cret-value-1234")
     with patch("routes.cron.run_market_refresh", return_value=12) as market, \
          patch("routes.cron.run_news_refresh", return_value=30) as news, \
+         patch("routes.cron.run_signals_refresh", return_value=5) as signals, \
          patch("routes.cron.send_digest", return_value=2) as digest:
         resp = client.get("/cron/daily", headers={"Authorization": "Bearer s3cret-value-1234"})
     assert resp.status_code == 200
     assert resp.json() == {
-        "market": 12, "news": 30, "digest_sent": 2, "errors": {},
+        "market": 12, "news": 30, "signals": 5, "digest_sent": 2, "errors": {},
     }
     market.assert_called_once()
     news.assert_called_once()
+    signals.assert_called_once()
     digest.assert_called_once()
 
 def test_cron_reports_partial_failure(monkeypatch):
     monkeypatch.setenv("CRON_SECRET", "s3cret-value-1234")
     with patch("routes.cron.run_market_refresh", side_effect=RuntimeError("yahoo down")), \
          patch("routes.cron.run_news_refresh", return_value=30), \
+         patch("routes.cron.run_signals_refresh", return_value=5), \
          patch("routes.cron.send_digest", return_value=1):
         resp = client.get("/cron/daily", headers={"Authorization": "Bearer s3cret-value-1234"})
     body = resp.json()
@@ -141,6 +144,7 @@ def test_cron_reports_partial_failure(monkeypatch):
     assert body["market"] is None
     assert "yahoo down" in body["errors"]["market"]
     assert body["news"] == 30
+    assert body["signals"] == 5
 
 
 # --- Telegram webhook ------------------------------------------------------

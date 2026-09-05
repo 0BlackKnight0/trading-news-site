@@ -42,8 +42,11 @@ export function Feed({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     }
   }
 
+  // Compared against created_at (when the row was written), not occurred_at
+  // (the market session timestamp, constant all day) — an intraday
+  // re-detection on today's still-forming bar must still count as unread.
   const isUnseen = (event: FeedEvent) =>
-    lastSeenAt !== null && event.occurred_at > lastSeenAt;
+    lastSeenAt !== null && event.created_at > lastSeenAt;
   const dividerIndex = events.findIndex((event) => !isUnseen(event));
 
   return (

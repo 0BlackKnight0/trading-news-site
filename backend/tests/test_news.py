@@ -1,6 +1,6 @@
 # backend/tests/test_news.py
 from unittest.mock import patch, MagicMock
-from aggregator.news import fetch_news, parse_rss
+from aggregator.news import _dedupe, fetch_news, parse_rss
 
 def test_parse_rss_returns_list_of_dicts():
     mock_feed = MagicMock()
@@ -32,10 +32,29 @@ def test_fetch_news_returns_items_for_category():
     assert len(result) >= 1
     assert result[0]["category"] == "trading"
 
-def test_fetch_news_deduplicates_by_title():
+def test_fetch_news_deduplicates_by_url():
     duplicate = {"title": "Same", "url": "http://a.com", "source": "S", "category": "trading", "published_at": None}
     with patch("aggregator.news.parse_rss", return_value=[duplicate, duplicate]):
         with patch("aggregator.news.fetch_newsapi", return_value=[duplicate]):
             result = fetch_news("trading")
-    titles = [r["title"] for r in result]
-    assert titles.count("Same") == 1
+    urls = [r["url"] for r in result]
+    assert urls.count("http://a.com") == 1
+
+
+def test_fetch_news_keeps_items_with_different_titles_but_the_same_url():
+    """url is the uniqueness contract now, not title — a re-syndicated
+    headline sharing a url with an earlier item must still collapse."""
+    a = {"title": "Original headline", "url": "http://shared.com", "source": "S", "category": "trading", "published_at": None}
+    b = {"title": "Rewritten headline", "url": "http://shared.com", "source": "S", "category": "trading", "published_at": None}
+    with patch("aggregator.news.parse_rss", return_value=[a, b]):
+        with patch("aggregator.news.fetch_newsapi", return_value=[]):
+            result = fetch_news("trading")
+    assert len(result) == 1
+
+
+def test_dedupe_keeps_items_with_no_url_distinct():
+    """Falsy urls can't be used to tell items apart, so they must not
+    collapse into a single item."""
+    a = {"title": "A", "url": "", "source": "S", "category": "trading", "published_at": None}
+    b = {"title": "B", "url": "", "source": "S", "category": "trading", "published_at": None}
+    assert _dedupe([a, b]) == [a, b]

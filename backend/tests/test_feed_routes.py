@@ -1,4 +1,5 @@
 # backend/tests/test_feed_routes.py
+import pytest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -11,10 +12,13 @@ HEADERS = {"X-Device-Key": "k" * MIN_KEY_LENGTH}
 
 EVENT = {
     "id": 1, "symbol": "RELIANCE", "kind": "RANGE_BREAK",
-    "occurred_at": "2026-03-04T10:00:00+00:00", "severity": 3,
+    "occurred_at": "2026-03-04T10:00:00+00:00", "created_at": "2026-03-04T10:05:00+00:00",
+    "severity": 3,
     "payload": {"scope": "52w", "direction": "high"},
     "dedupe_key": "RELIANCE|RANGE_BREAK|2026-03-04",
 }
+
+WATCHED_SYMBOLS = ["RELIANCE"]
 
 
 def _as_user(user_id="u1"):
@@ -25,9 +29,31 @@ def teardown_function():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _stub_signals_refresh_and_watchlist():
+    """Every /feed read revalidates signals and scopes to the caller's watchlist.
+
+    Stubbed at module scope so existing tests, which predate both behaviours,
+    don't need their own `with` blocks touched.
+    """
+    with patch("routes.feed.refresh_signals_if_stale", return_value=False), \
+         patch("routes.feed.get_watchlist", return_value=[{"symbol": s} for s in WATCHED_SYMBOLS]):
+        yield
+
+
 def test_feed_requires_a_device_key():
     resp = client.get("/feed")
     assert resp.status_code == 401
+
+
+def test_feed_calls_refresh_signals_if_stale_before_reading():
+    _as_user()
+    with patch("routes.feed.refresh_signals_if_stale") as refresh, \
+         patch("routes.feed.get_last_seen", return_value="2026-03-01T00:00:00+00:00"), \
+         patch("routes.feed.get_events", return_value=[]), \
+         patch("routes.feed.count_events_since", return_value=0):
+        client.get("/feed", headers=HEADERS)
+    refresh.assert_called_once()
 
 
 def test_feed_returns_events_with_an_unread_count():
@@ -49,7 +75,7 @@ def test_unread_is_counted_against_the_users_last_visit():
          patch("routes.feed.get_events", return_value=[]), \
          patch("routes.feed.count_events_since") as counter:
         client.get("/feed", headers=HEADERS)
-    counter.assert_called_once_with("2026-03-01T00:00:00+00:00")
+    counter.assert_called_once_with(WATCHED_SYMBOLS, "2026-03-01T00:00:00+00:00")
 
 
 def test_since_overrides_the_divider_baseline():
@@ -58,7 +84,7 @@ def test_since_overrides_the_divider_baseline():
          patch("routes.feed.get_events", return_value=[]), \
          patch("routes.feed.count_events_since") as counter:
         client.get("/feed?since=2026-02-01T00:00:00%2B00:00", headers=HEADERS)
-    counter.assert_called_once_with("2026-02-01T00:00:00+00:00")
+    counter.assert_called_once_with(WATCHED_SYMBOLS, "2026-02-01T00:00:00+00:00")
 
 
 def test_next_cursor_is_null_on_a_short_page():
@@ -106,7 +132,7 @@ def test_cursor_is_parsed_and_forwarded_to_get_events():
             params={"cursor": "2026-03-04T10:00:00+00:00|1"},
             headers=HEADERS,
         )
-    getter.assert_called_once_with(before_ts="2026-03-04T10:00:00+00:00", before_id=1, limit=50)
+    getter.assert_called_once_with(WATCHED_SYMBOLS, before_ts="2026-03-04T10:00:00+00:00", before_id=1, limit=50)
 
 
 def test_malformed_cursor_is_treated_as_no_cursor():
@@ -116,7 +142,20 @@ def test_malformed_cursor_is_treated_as_no_cursor():
          patch("routes.feed.count_events_since", return_value=0):
         resp = client.get("/feed", params={"cursor": "garbage"}, headers=HEADERS)
     assert resp.status_code == 200
-    getter.assert_called_once_with(before_ts=None, before_id=None, limit=50)
+    getter.assert_called_once_with(WATCHED_SYMBOLS, before_ts=None, before_id=None, limit=50)
+
+
+def test_feed_is_scoped_to_the_callers_watchlist():
+    """get_events and count_events_since must be called with the caller's
+    own watchlist symbols, not an unscoped read of the whole events table."""
+    _as_user()
+    with patch("routes.feed.get_watchlist", return_value=[{"symbol": "TCS"}, {"symbol": "INFY"}]), \
+         patch("routes.feed.get_last_seen", return_value="2026-03-01T00:00:00+00:00"), \
+         patch("routes.feed.get_events", return_value=[]) as getter, \
+         patch("routes.feed.count_events_since", return_value=0) as counter:
+        client.get("/feed", headers=HEADERS)
+    getter.assert_called_once_with(["TCS", "INFY"], before_ts=None, before_id=None, limit=50)
+    counter.assert_called_once_with(["TCS", "INFY"], "2026-03-01T00:00:00+00:00")
 
 
 def test_catch_up_advances_last_seen():

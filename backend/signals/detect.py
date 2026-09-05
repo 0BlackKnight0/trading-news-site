@@ -16,6 +16,7 @@ from signals.types import Bar, DetectedEvent, SymbolStats
 MOVE_RANGE_MULTIPLE = 2.0
 VOLUME_MULTIPLE = 2.0
 GAP_THRESHOLD = 0.015
+MIN_BARS_FOR_52W = 200
 
 
 def _severity(value: float, medium: float, high: float) -> int:
@@ -87,10 +88,20 @@ def _volume_spike(symbol, latest, prev, stats):
     })
 
 
-def _range_break(symbol, latest, prev, stats):
-    """A 52-week break outranks a 20-day one; only the wider scope is reported."""
+def _range_break(symbol, latest, prev, stats, history_len):
+    """A 52-week break outranks a 20-day one; only the wider scope is reported.
+
+    `stats.high_52w`/`low_52w` are really just "the max/min of whatever bars
+    were handed to compute_stats" — there is no calendar-window check inside
+    stats.py. With less than a year of history, that max/min is only a
+    partial-history high, not a genuine 52-week one, so labelling a break
+    against it "New 52-week high" would be a false claim. Below
+    MIN_BARS_FOR_52W the 52-week scope is skipped entirely, as if those
+    levels were absent, and the check falls through to the 20-day box.
+    """
     checks = [
-        ("52w", 3, stats.high_52w, stats.low_52w),
+        ("52w", 3, stats.high_52w if history_len >= MIN_BARS_FOR_52W else None,
+         stats.low_52w if history_len >= MIN_BARS_FOR_52W else None),
         ("20d", 1, stats.high_20d, stats.low_20d),
     ]
     for scope, severity, high, low in checks:
@@ -113,8 +124,13 @@ def detect(
     prev: Bar,
     stats: SymbolStats,
     min_move_pct: float | None = None,
+    history_len: int = 0,
 ) -> list[DetectedEvent]:
-    """Return every event this bar triggers. Empty list means "nothing happened"."""
+    """Return every event this bar triggers. Empty list means "nothing happened".
+
+    `history_len` is the number of bars behind `stats` — it gates whether a
+    RANGE_BREAK may claim the 52-week scope. See _range_break.
+    """
     if not prev.close or not latest.close:
         return []
 
@@ -122,6 +138,6 @@ def detect(
         _big_move(symbol, latest, prev, stats, min_move_pct),
         _gap(symbol, latest, prev, stats),
         _volume_spike(symbol, latest, prev, stats),
-        _range_break(symbol, latest, prev, stats),
+        _range_break(symbol, latest, prev, stats, history_len),
     ]
     return [event for event in candidates if event is not None]

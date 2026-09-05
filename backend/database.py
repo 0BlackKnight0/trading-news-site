@@ -47,10 +47,14 @@ def insert_news(items: list[dict]):
         new_items = [i for i in items if i["title"] not in existing_titles]
         if new_items:
             try:
-                get_client().table("news_cache").insert(new_items).execute()
+                (get_client().table("news_cache")
+                 .upsert(new_items, on_conflict="url", ignore_duplicates=True)
+                 .execute())
             except Exception:
                 stripped = [{k: v for k, v in item.items() if k != "summary"} for item in new_items]
-                get_client().table("news_cache").insert(stripped).execute()
+                (get_client().table("news_cache")
+                 .upsert(stripped, on_conflict="url", ignore_duplicates=True)
+                 .execute())
 
         # Backfill summaries for existing articles that have none
         for item in items:
@@ -194,8 +198,8 @@ def upsert_events(events: list[DetectedEvent]) -> int:
     return len(rows)
 
 
-def get_events(before_ts: str | None = None, before_id: int | None = None, limit: int = 50) -> list[dict]:
-    """Events newest-first, ordered by (occurred_at, id).
+def get_events(symbols: list[str], before_ts: str | None = None, before_id: int | None = None, limit: int = 50) -> list[dict]:
+    """Events newest-first, ordered by (occurred_at, id), scoped to `symbols`.
 
     `occurred_at` is a market bar's timestamp, so every symbol on the same
     exchange session shares the exact same value — ties are the norm, not an
@@ -206,9 +210,17 @@ def get_events(before_ts: str | None = None, before_id: int | None = None, limit
     `before_ts`/`before_id` together form the cursor: rows strictly before
     that (occurred_at, id) pair, walking through a tied group rather than
     jumping over it.
+
+    `symbols` scopes the read to the caller's own watchlist. An empty list
+    means the caller watches nothing, so the query is skipped entirely
+    rather than issuing a needless (and inconsistently-handled) empty
+    `.in_()` round trip.
     """
+    if not symbols:
+        return []
     query = (get_client().table("events")
              .select("*")
+             .in_("symbol", symbols)
              .order("occurred_at", desc=True)
              .order("id", desc=True)
              .limit(limit))
@@ -219,24 +231,48 @@ def get_events(before_ts: str | None = None, before_id: int | None = None, limit
     return query.execute().data or []
 
 
-def count_events_since(ts: str) -> int:
+def count_events_since(symbols: list[str], ts: str) -> int:
+    """Count events for `symbols` created after `ts` (the unread baseline).
+
+    Compares on `created_at` — when the row was written — not `occurred_at`,
+    which is the market session timestamp and stays constant across an
+    entire trading day's worth of intraday re-detections. See upsert_events.
+    """
+    if not symbols:
+        return 0
     res = (get_client().table("events")
            .select("id", count="exact")
-           .gt("occurred_at", ts)
+           .in_("symbol", symbols)
+           .gt("created_at", ts)
            .execute())
     return res.count or 0
 
 
 def get_or_create_user(device_key: str) -> dict:
-    existing = (get_client().table("users")
-                .select("*").eq("device_key", device_key).limit(1).execute())
-    if existing.data:
-        return existing.data[0]
-    created = get_client().table("users").insert({"device_key": device_key}).execute()
+    """Atomically get-or-create the user for `device_key`.
+
+    Upserting (rather than select-then-insert) means two concurrent
+    invocations for a brand-new device key never race each other into a
+    23505 on the `device_key` unique constraint — Vercel routinely runs
+    Sidebar's and Feed's first-load calls in separate invocations.
+
+    `user_state` is upserted unconditionally on every call, not only when
+    the user is freshly created: if a prior call's users-write succeeded
+    but its user_state-write failed, the user would otherwise never get a
+    user_state row, and get_last_seen would return "now" forever, pinning
+    unread at 0 permanently. `ignore_duplicates=True` makes this a pure
+    self-heal — an existing row (and its real last_seen_at) is left alone;
+    only a missing row gets created, seeded to "now" so a brand-new user
+    starts with nothing marked unread.
+    """
+    created = (get_client().table("users")
+               .upsert({"device_key": device_key}, on_conflict="device_key")
+               .execute())
     user = created.data[0]
-    get_client().table("user_state").upsert(
-        {"user_id": user["id"], "last_seen_at": _now_iso()}, on_conflict="user_id"
-    ).execute()
+    (get_client().table("user_state")
+     .upsert({"user_id": user["id"], "last_seen_at": _now_iso()},
+             on_conflict="user_id", ignore_duplicates=True)
+     .execute())
     return user
 
 

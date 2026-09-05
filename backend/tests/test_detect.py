@@ -117,7 +117,7 @@ def test_volume_spike_skipped_when_volume_is_missing():
 # --- RANGE_BREAK ----------------------------------------------------------
 
 def test_range_break_on_new_52_week_high():
-    events = detect("X", _bar(125.0), _bar(119.0, ts=PRIOR), BASE)
+    events = detect("X", _bar(125.0), _bar(119.0, ts=PRIOR), BASE, history_len=250)
     break_ = [e for e in events if e.kind == "RANGE_BREAK"][0]
     assert break_.severity == 3
     assert break_.payload["scope"] == "52w"
@@ -137,7 +137,7 @@ def test_range_break_falls_back_to_the_twenty_day_box():
 
 
 def test_range_break_reports_52w_not_20d_when_both_are_broken():
-    events = detect("X", _bar(125.0), _bar(119.0, ts=PRIOR), BASE)
+    events = detect("X", _bar(125.0), _bar(119.0, ts=PRIOR), BASE, history_len=250)
     breaks = [e for e in events if e.kind == "RANGE_BREAK"]
     assert len(breaks) == 1
     assert breaks[0].payload["scope"] == "52w"
@@ -146,6 +146,30 @@ def test_range_break_reports_52w_not_20d_when_both_are_broken():
 def test_inside_the_range_produces_no_break():
     events = detect("X", _bar(100.0), _bar(100.0, ts=PRIOR), BASE)
     assert "RANGE_BREAK" not in _kinds(events)
+
+
+def test_range_break_falls_back_to_20d_without_enough_history_for_52w():
+    """A 52w-level break must not be labelled 52w on a young symbol.
+
+    With fewer than MIN_BARS_FOR_52W bars behind it, `history_len` is too
+    small to back a genuine 52-week claim, so a close above high_52w must
+    fall through to the 20-day box check (or report nothing if that box
+    isn't cleared either) rather than reporting scope "52w".
+    """
+    events = detect("X", _bar(125.0), _bar(119.0, ts=PRIOR), BASE, history_len=50)
+    breaks = [e for e in events if e.kind == "RANGE_BREAK"]
+    assert len(breaks) == 1
+    assert breaks[0].payload["scope"] == "20d"
+    assert breaks[0].severity == 1
+
+
+def test_range_break_reports_52w_with_enough_history():
+    """With a full year of history behind it, the 52-week scope is honoured."""
+    events = detect("X", _bar(125.0), _bar(119.0, ts=PRIOR), BASE, history_len=250)
+    breaks = [e for e in events if e.kind == "RANGE_BREAK"]
+    assert len(breaks) == 1
+    assert breaks[0].payload["scope"] == "52w"
+    assert breaks[0].severity == 3
 
 
 # --- Event shape ----------------------------------------------------------

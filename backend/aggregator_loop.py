@@ -11,16 +11,19 @@ import time
 from aggregator.market import fetch_all as fetch_all_market
 from aggregator.news import fetch_all_news
 from database import (
+    get_all_watched_symbols,
     insert_news,
     mark_refreshed,
     seconds_since_refresh,
     upsert_market,
 )
+from pipeline import refresh_all
 
 logger = logging.getLogger(__name__)
 
 MARKET_TTL = 900    # 15 minutes
 NEWS_TTL = 1800     # 30 minutes
+SIGNALS_TTL = 900   # 15 minutes
 
 # Per-instance memo. Warm invocations skip the staleness query entirely, and
 # it caps the damage to one refresh per TTL if refresh_meta is unavailable.
@@ -59,6 +62,14 @@ def run_news_refresh():
     return len(items)
 
 
+def run_signals_refresh():
+    result = refresh_all(get_all_watched_symbols())
+    if result["symbols"]:
+        _mark("signals")
+    logger.info(f"Signals refreshed: {result['events']} events")
+    return result["events"]
+
+
 def refresh_market_if_stale() -> bool:
     """Refresh market data when the cache has expired. Never raises."""
     if not _is_stale("market", MARKET_TTL):
@@ -80,4 +91,16 @@ def refresh_news_if_stale() -> bool:
         return True
     except Exception as e:
         logger.error(f"News refresh failed: {e}")
+        return False
+
+
+def refresh_signals_if_stale() -> bool:
+    """Refresh signals when the cache has expired. Never raises."""
+    if not _is_stale("signals", SIGNALS_TTL):
+        return False
+    try:
+        run_signals_refresh()
+        return True
+    except Exception as e:
+        logger.error(f"Signals refresh failed: {e}")
         return False

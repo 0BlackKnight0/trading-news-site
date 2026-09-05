@@ -156,11 +156,20 @@ def fetch_newsapi(category: str) -> list[dict]:
 
 
 def _dedupe(items: list[dict]) -> list[dict]:
+    """Collapse duplicates by url — the database's uniqueness contract.
+
+    A falsy url (missing/empty) can't be used to tell items apart, so such
+    items are kept as-is rather than collapsing into one another.
+    """
     seen = set()
     unique = []
     for item in items:
-        if item["title"] not in seen:
-            seen.add(item["title"])
+        url = item.get("url")
+        if not url:
+            unique.append(item)
+            continue
+        if url not in seen:
+            seen.add(url)
             unique.append(item)
     return unique
 

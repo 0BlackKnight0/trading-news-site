@@ -71,6 +71,7 @@ export interface FeedEvent {
   symbol: string;
   kind: EventKind;
   occurred_at: string;
+  created_at: string;
   severity: 1 | 2 | 3;
   payload: Record<string, string | number>;
 }

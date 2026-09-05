@@ -7,7 +7,8 @@ those the caller has not seen. The divider the UI draws sits at
 """
 from fastapi import APIRouter, Depends, Query
 
-from database import count_events_since, get_events, get_last_seen, set_last_seen
+from aggregator_loop import refresh_signals_if_stale
+from database import count_events_since, get_events, get_last_seen, get_watchlist, set_last_seen
 from identity import current_user
 
 router = APIRouter()
@@ -44,11 +45,15 @@ def feed(
     since: str | None = Query(default=None),
     user: dict = Depends(current_user),
 ):
+    # No background worker on serverless — the read refreshes stale data.
+    refresh_signals_if_stale()
+
     # `since` lets the client re-anchor the divider ("show me this week");
     # by default the baseline is where the user actually stopped reading.
     baseline = since or get_last_seen(user["id"])
+    symbols = [row["symbol"] for row in get_watchlist(user["id"])]
     before_ts, before_id = _parse_cursor(cursor)
-    events = get_events(before_ts=before_ts, before_id=before_id, limit=limit)
+    events = get_events(symbols, before_ts=before_ts, before_id=before_id, limit=limit)
     next_cursor = (
         _make_cursor(events[-1]["occurred_at"], events[-1]["id"])
         if len(events) == limit
@@ -56,7 +61,7 @@ def feed(
     )
     return {
         "events": events,
-        "unread_count": count_events_since(baseline),
+        "unread_count": count_events_since(symbols, baseline),
         "last_seen_at": baseline,
         "next_cursor": next_cursor,
     }
