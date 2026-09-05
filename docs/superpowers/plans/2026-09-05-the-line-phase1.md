@@ -637,7 +637,10 @@ def _event(symbol, kind, latest, severity, payload) -> DetectedEvent:
 def _big_move(symbol, latest, prev, stats, min_move_pct):
     if not stats.avg_daily_range:
         return None
-    move = latest.close / prev.close - 1
+    # Subtract before dividing. Divide-then-subtract loses precision and
+    # pushes an exact 2x multiple to 2.0000000000000018, firing an event the
+    # threshold is meant to exclude.
+    move = (latest.close - prev.close) / prev.close
     multiple = abs(move) / stats.avg_daily_range
     if multiple <= MOVE_RANGE_MULTIPLE:
         return None
@@ -723,12 +726,12 @@ def detect(
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd backend && ./venv/bin/python -m pytest tests/test_detect.py -q`
-Expected: `23 passed`
+Expected: `24 passed`
 
 - [ ] **Step 5: Run the whole suite to confirm nothing regressed**
 
 Run: `cd backend && ./venv/bin/python -m pytest -q`
-Expected: `72 passed` (40 existing + 9 stats + 23 detect)
+Expected: `73 passed` (40 existing + 9 stats + 24 detect)
 
 - [ ] **Step 6: Commit**
 
