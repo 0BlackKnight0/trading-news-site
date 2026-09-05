@@ -273,3 +273,74 @@ def fetch_all_news() -> list[dict]:
         )
         tasks.append(lambda c=category: fetch_newsapi(c))
     return _dedupe(_gather(tasks))
+
+
+# Yahoo's search endpoint resolves a ticker to its own news. Matching
+# headlines to symbols ourselves would be fragile — "TCS" appears inside
+# unrelated words and "INFY" never appears in prose at all — so entity
+# resolution is Yahoo's problem. routes/ticker.py already uses this endpoint
+# successfully in production.
+SYMBOL_NEWS_URL = "https://query2.finance.yahoo.com/v1/finance/search"
+SYMBOL_NEWS_COUNT = 8
+SYMBOL_NEWS_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+}
+
+
+def fetch_symbol_news(symbol: str) -> list[dict]:
+    """Recent news for one ticker. Returns [] on any failure."""
+    try:
+        resp = requests.get(
+            SYMBOL_NEWS_URL,
+            params={"q": symbol, "newsCount": SYMBOL_NEWS_COUNT, "quotesCount": 0},
+            headers=SYMBOL_NEWS_HEADERS,
+            timeout=HTTP_TIMEOUT,
+        )
+        entries = resp.json().get("news") or []
+    except Exception:
+        return []
+
+    items = []
+    for entry in entries:
+        title = entry.get("title") or ""
+        if not title:
+            continue
+        source = entry.get("publisher") or ""
+        if _is_denied_source(source):
+            continue
+        ts = entry.get("providerPublishTime")
+        published_at = (
+            datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else None
+        )
+        items.append({
+            "title": title,
+            "url": entry.get("link") or "",
+            "source": source,
+            "category": None,       # symbol rows carry no category
+            "published_at": published_at,
+            "summary": _clean_html(entry.get("summary") or "") or None,
+            "symbol": symbol,
+        })
+    return items
+
+
+def fetch_all_symbol_news(symbols: list[str]) -> list[dict]:
+    """Fetch every symbol concurrently. One dead symbol never stops the rest."""
+    if not symbols:
+        return []
+
+    def one(symbol: str) -> list[dict]:
+        try:
+            return fetch_symbol_news(symbol)
+        except Exception:
+            return []
+
+    items: list[dict] = []
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(symbols))) as pool:
+        for result in pool.map(one, symbols):
+            items.extend(result)
+    return _dedupe(items)
