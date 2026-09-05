@@ -43,6 +43,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     }
   }, []);
 
+  // Owned here, not inside WatchlistManager: both the watchlist row AND the
+  // market row's checkmark need to hide/clear at the same instant a remove
+  // is clicked. Keeping this state local to WatchlistManager left the
+  // checkmark depending solely on fetchWatchlist's round trip, so on real
+  // network latency (unlike localhost) the row could vanish instantly while
+  // the checkmark visibly lagged behind for a second or more.
+  const [pendingRemovals, setPendingRemovals] = useState<Set<string>>(new Set());
+
   const fetchWatchlist = useCallback(async () => {
     // Called right after an add/remove, back-to-back with the mutation's own
     // request — a transient failure here (seen live: net::ERR_FAILED on the
@@ -50,16 +58,27 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     // watchlist showing pre-change state until something else, like a full
     // page reload, happened to trigger a working fetch. One retry absorbs
     // that class of one-off failure without a full retry framework.
+    let data: WatchlistItem[] | null = null;
     try {
-      setWatchlist(await api.getWatchlist());
+      data = await api.getWatchlist();
     } catch (e) {
       console.error("watchlist fetch failed, retrying once", e);
       try {
-        setWatchlist(await api.getWatchlist());
+        data = await api.getWatchlist();
       } catch (e2) {
         console.error(e2);
       }
     }
+    if (!data) return;
+    setWatchlist(data);
+    // A pending removal is only "done" once the server-confirmed list no
+    // longer contains it — this also makes re-adding the same symbol later
+    // show up correctly rather than staying hidden.
+    const present = new Set(data.map((w) => w.symbol));
+    setPendingRemovals((prev) => {
+      const next = new Set([...prev].filter((sym) => present.has(sym)));
+      return next.size === prev.size ? prev : next;
+    });
   }, []);
 
   useEffect(() => {
@@ -69,17 +88,38 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   useInterval(fetchMarket, 60_000);
 
+  const visibleWatchlist = useMemo(
+    () => watchlist.filter((w) => !pendingRemovals.has(w.symbol)),
+    [watchlist, pendingRemovals]
+  );
+
   // Matched against a market row's watchlist_symbol (the real Yahoo
   // ticker), not its display symbol — "NIFTY" is never what actually ends
-  // up in the watchlist table, "^NSEI" is.
+  // up in the watchlist table, "^NSEI" is. Derived from visibleWatchlist,
+  // not raw watchlist, so a checkmark clears in the same instant its
+  // watchlist row disappears.
   const watchedSymbols = useMemo(
-    () => new Set(watchlist.map((w) => w.symbol)),
-    [watchlist]
+    () => new Set(visibleWatchlist.map((w) => w.symbol)),
+    [visibleWatchlist]
   );
 
   async function handleAddFromMarket(symbol: string, type: WatchlistType) {
     await api.addToWatchlist(symbol, type);
     await fetchWatchlist();
+  }
+
+  function handleRemoveStart(symbol: string) {
+    setPendingRemovals((prev) => new Set(prev).add(symbol));
+  }
+
+  function handleRemoveFailed(symbol: string) {
+    // The delete didn't actually happen — put it back rather than leaving
+    // it looking removed when it isn't.
+    setPendingRemovals((prev) => {
+      const next = new Set(prev);
+      next.delete(symbol);
+      return next;
+    });
   }
 
   const india = market.filter((m) => m.category === "india");
@@ -175,7 +215,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         )}
 
         <div className="mt-4 border-t border-[#1c1c1c] pt-3">
-          <WatchlistManager items={watchlist} onUpdate={fetchWatchlist} />
+          <WatchlistManager
+            items={visibleWatchlist}
+            onUpdate={fetchWatchlist}
+            onRemoveStart={handleRemoveStart}
+            onRemoveFailed={handleRemoveFailed}
+          />
         </div>
       </div>
     </aside>
