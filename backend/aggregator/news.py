@@ -154,7 +154,7 @@ _CATEGORY_FILTERS = {
     "tech": (_TECH_BLOCK, _TECH_ALLOW),
     "energy": (_ENERGY_BLOCK, _ENERGY_ALLOW),
     "crypto": (_ENERGY_BLOCK, _CRYPTO_ALLOW),
-    "geopolitics": (_TRADING_BLOCK, _GEOPOLITICS_ALLOW),
+    "geopolitics": (_MARKETS_BLOCK, _GEOPOLITICS_ALLOW),
 }
 
 # Sources NewsAPI keeps surfacing that never carry market news. Matched on the

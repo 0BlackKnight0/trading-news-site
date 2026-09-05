@@ -1,6 +1,6 @@
 # backend/tests/test_news.py
 from unittest.mock import patch, MagicMock
-from aggregator.news import _dedupe, fetch_news, parse_rss
+from aggregator.news import NEWSAPI_QUERIES, RSS_FEEDS, _dedupe, fetch_news, parse_rss
 
 def test_parse_rss_returns_list_of_dicts():
     mock_feed = MagicMock()
@@ -25,12 +25,15 @@ def test_parse_rss_survives_a_dead_feed():
         assert parse_rss("http://dead-feed.com", "trading", "TestSource") == []
 
 def test_fetch_news_returns_items_for_category():
-    mock_items = [{"title": "T", "url": "http://x.com", "source": "S", "category": "trading", "published_at": "2026-05-11T08:00:00"}]
+    # "markets" is the current name for what used to be "trading" — the
+    # category rename in a886bc8 dropped RSS_FEEDS["trading"] entirely, so a
+    # mocked parse_rss is never even reached for the old name.
+    mock_items = [{"title": "T", "url": "http://x.com", "source": "S", "category": "markets", "published_at": "2026-05-11T08:00:00"}]
     with patch("aggregator.news.parse_rss", return_value=mock_items):
         with patch("aggregator.news.fetch_newsapi", return_value=[]):
-            result = fetch_news("trading")
+            result = fetch_news("markets")
     assert len(result) >= 1
-    assert result[0]["category"] == "trading"
+    assert result[0]["category"] == "markets"
 
 def test_fetch_news_deduplicates_by_url():
     duplicate = {"title": "Same", "url": "http://a.com", "source": "S", "category": "trading", "published_at": None}
@@ -44,11 +47,11 @@ def test_fetch_news_deduplicates_by_url():
 def test_fetch_news_keeps_items_with_different_titles_but_the_same_url():
     """url is the uniqueness contract now, not title — a re-syndicated
     headline sharing a url with an earlier item must still collapse."""
-    a = {"title": "Original headline", "url": "http://shared.com", "source": "S", "category": "trading", "published_at": None}
-    b = {"title": "Rewritten headline", "url": "http://shared.com", "source": "S", "category": "trading", "published_at": None}
+    a = {"title": "Original headline", "url": "http://shared.com", "source": "S", "category": "markets", "published_at": None}
+    b = {"title": "Rewritten headline", "url": "http://shared.com", "source": "S", "category": "markets", "published_at": None}
     with patch("aggregator.news.parse_rss", return_value=[a, b]):
         with patch("aggregator.news.fetch_newsapi", return_value=[]):
-            result = fetch_news("trading")
+            result = fetch_news("markets")
     assert len(result) == 1
 
 
@@ -122,6 +125,13 @@ def test_dead_feeds_are_gone():
         assert not any(dead in u for u in urls), dead
 
 
-def test_every_category_still_has_at_least_one_feed():
-    for category, feeds in RSS_FEEDS.items():
-        assert len(feeds) >= 1, category
+def test_every_category_has_at_least_one_source():
+    # "geopolitics" is deliberately RSS-less (a886bc8): it's meant to come
+    # from a licensed provider rather than scraped feeds, and relies on
+    # NewsAPI alone until that provider exists. The real invariant is "some
+    # source exists", not "an RSS feed exists" — this still catches a
+    # category that was added with neither.
+    for category in RSS_FEEDS:
+        has_rss = len(RSS_FEEDS[category]) >= 1
+        has_newsapi_query = bool(NEWSAPI_QUERIES.get(category, "").strip())
+        assert has_rss or has_newsapi_query, category
