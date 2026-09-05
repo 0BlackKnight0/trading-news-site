@@ -2235,11 +2235,187 @@ git commit -m "feat: the feed, the divider and the quiet state"
 
 ---
 
+## Task 13: Priced watchlist with visible staleness
+
+**Files:**
+- Modify: `backend/database.py`
+- Modify: `backend/routes/watchlist.py`
+- Modify: `frontend/types.ts`
+- Modify: `frontend/components/WatchlistManager.tsx`
+- Test: `backend/tests/test_routes.py`
+
+**Interfaces:**
+- Consumes: `get_snapshots` from Task 5, `current_user` from Task 7
+- Produces: `get_watchlist_quotes(user_id: str) -> list[dict]` returning rows of
+  `{id, symbol, type, price, change_pct, as_of}` where `price`, `change_pct` and
+  `as_of` are `None` when no snapshot exists yet
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `backend/tests/test_routes.py`:
+
+```python
+def test_watchlist_rows_carry_price_and_as_of():
+    _as_watchlist_user("u42")
+    rows = [{"id": 1, "symbol": "X", "type": "stock", "price": 105.0,
+             "change_pct": 5.0, "as_of": "2026-03-04T00:00:00+00:00"}]
+    with patch("routes.watchlist.get_watchlist_quotes", return_value=rows):
+        body = client.get("/watchlist", headers=WL_HEADERS).json()
+    assert body[0]["price"] == 105.0
+    assert body[0]["as_of"] == "2026-03-04T00:00:00+00:00"
+
+
+def test_watchlist_row_without_history_reports_null_price_not_zero():
+    """A missing price must read as unknown, never as a real value of zero."""
+    _as_watchlist_user("u42")
+    rows = [{"id": 1, "symbol": "NEW", "type": "stock", "price": None,
+             "change_pct": None, "as_of": None}]
+    with patch("routes.watchlist.get_watchlist_quotes", return_value=rows):
+        body = client.get("/watchlist", headers=WL_HEADERS).json()
+    assert body[0]["price"] is None
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `cd backend && ./venv/bin/python -m pytest tests/test_routes.py -q`
+Expected: FAIL, `AttributeError: <module 'routes.watchlist'> does not have the attribute 'get_watchlist_quotes'`
+
+- [ ] **Step 3: Add the accessor to `backend/database.py`**
+
+Append:
+
+```python
+def get_watchlist_quotes(user_id: str) -> list[dict]:
+    """Watchlist rows enriched with the latest stored price.
+
+    Prices come from `price_snapshots`, not from a live fetch, so the row can
+    always state honestly how old the number is. Symbols with no history yet
+    report None rather than zero — unknown is not the same as worthless.
+    """
+    rows = get_watchlist(user_id)
+    enriched = []
+    for row in rows:
+        bars = get_snapshots(row["symbol"], limit=2)
+        price = change_pct = as_of = None
+        if bars:
+            price = bars[-1].close
+            as_of = bars[-1].ts
+            if len(bars) == 2 and bars[0].close:
+                change_pct = (bars[-1].close / bars[0].close - 1) * 100
+        enriched.append({**row, "price": price, "change_pct": change_pct, "as_of": as_of})
+    return enriched
+```
+
+- [ ] **Step 4: Return the enriched rows from `backend/routes/watchlist.py`**
+
+Change the import line to:
+
+```python
+from database import add_to_watchlist, get_watchlist_quotes, remove_from_watchlist
+```
+
+Change the list route body to:
+
+```python
+@router.get("/watchlist")
+def list_watchlist(user: dict = Depends(current_user)):
+    return get_watchlist_quotes(user["id"])
+```
+
+- [ ] **Step 5: Run to verify it passes**
+
+Run: `cd backend && ./venv/bin/python -m pytest -q`
+Expected: all tests pass.
+
+- [ ] **Step 6: Extend the frontend type in `frontend/types.ts`**
+
+Replace the `WatchlistItem` interface with:
+
+```typescript
+export interface WatchlistItem {
+  id: number;
+  symbol: string;
+  type: "stock" | "crypto" | "forex";
+  added_at: string;
+  price: number | null;
+  change_pct: number | null;
+  as_of: string | null;
+}
+```
+
+- [ ] **Step 7: Show price and age on each row in `frontend/components/WatchlistManager.tsx`**
+
+Add above the component:
+
+```tsx
+function ageLabel(asOf: string | null): string {
+  if (!asOf) return "no data yet";
+  const minutes = Math.floor((Date.now() - new Date(asOf).getTime()) / 60000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+```
+
+Replace the row body — the `<span>` showing `{item.symbol}` and the sibling
+`<div className="flex items-center gap-1.5">` — with:
+
+```tsx
+          <div className="min-w-0">
+            <span className="text-[11px] font-medium text-[#888] group-hover:text-[#ccc] transition-colors">
+              {item.symbol}
+            </span>
+            {/* Age is always stated. A price with no timestamp is a lie. */}
+            <span className="block text-[9px] text-[#3a3a3a]">{ageLabel(item.as_of)}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {item.price === null ? (
+              <span className="text-[10px] text-[#3a3a3a]">—</span>
+            ) : (
+              <div className="text-right">
+                <div className="text-[11px] font-semibold text-[#e0e0e0] tabular-nums leading-none">
+                  {item.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                </div>
+                {item.change_pct !== null && (
+                  <div
+                    className={`text-[9px] tabular-nums mt-0.5 ${
+                      item.change_pct >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"
+                    }`}
+                  >
+                    {item.change_pct >= 0 ? "▲" : "▼"} {Math.abs(item.change_pct).toFixed(2)}%
+                  </div>
+                )}
+              </div>
+            )}
+            <button
+              onClick={(e) => handleRemove(item.symbol, e)}
+              className="text-[#2a2a2a] hover:text-[#ef4444] opacity-0 group-hover:opacity-100 transition-all text-[10px]"
+            >
+              ✕
+            </button>
+          </div>
+```
+
+- [ ] **Step 8: Typecheck and build**
+
+Run: `cd frontend && npx tsc --noEmit && npm run build`
+Expected: no type errors; build succeeds.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add backend/database.py backend/routes/watchlist.py backend/tests/test_routes.py frontend/types.ts frontend/components/WatchlistManager.tsx
+git commit -m "feat: price watchlist rows and state their age"
+```
+
+---
+
 ## Self-Review Notes
 
-**Spec coverage.** §4 data model → Task 1. §5 detectors → Tasks 2–3. §6 pipeline → Task 6. §7 identity → Tasks 7, 11. §8 API → Tasks 8, 9. §10 scale (news url constraint, indexed feed) → Tasks 1, 8. §11 defects: #2 admin auth → Task 9; #3 news duplicates → Task 1; #10 watchlist prices → deferred to Task 13 below. §13 Phase 1 items 1–6 → Tasks 1–12.
+**Spec coverage.** §4 data model → Task 1. §5 detectors → Tasks 2–3. §6 pipeline → Task 6. §7 identity → Tasks 7, 11. §8 API → Tasks 8, 9. §10 scale (news url constraint, indexed feed) → Tasks 1, 8. §11 defects: #2 admin auth → Task 9; #3 news duplicates → Task 1; #10 watchlist prices → Task 13. §13 Phase 1 items 1–7 → Tasks 1–13.
 
-**Known gap carried forward.** Phase 1 item 7 — the priced watchlist sidebar with staleness badges and the market-status chip — is **not** covered by Tasks 1–12. It depends on nothing from them and is a self-contained follow-up (`Sidebar.tsx`, `PriceRow.tsx`, plus an `as_of` field on `/market`). Track it as **Task 13** and write it once Tasks 1–12 are green, so the plan does not grow a placeholder.
+**Spec coverage, continued.** Phase 1 item 7 — the priced watchlist with visible staleness — is Task 13. The **market-status chip** ("NSE closed · opens in 3h") is explicitly moved to **Phase 2**: it needs exchange metadata and timezone handling that arrive with the `/history` work, and Task 13's per-row age label already answers "how old is this number" without it.
 
 **Defects deliberately not fixed in Phase 1** (spec §11 items 4–9): the `published_at` NULL ordering, the dead ticker stat cells, the `$`-on-INR bug, Telegram Markdown escaping, the UTC/IST digest header, and the `CORS_ORIGINS` default. None block the feed. They belong with Phase 3, when the digest is rewritten to read from `events`.
 
