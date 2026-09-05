@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { MarketPrice, WatchlistItem } from "@/types";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { MarketPrice, WatchlistItem, WatchlistType } from "@/types";
 import { api } from "@/lib/api";
 import { useInterval } from "@/hooks/useInterval";
 import { PriceRow } from "./PriceRow";
@@ -69,6 +69,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   useInterval(fetchMarket, 60_000);
 
+  // Matched against a market row's watchlist_symbol (the real Yahoo
+  // ticker), not its display symbol — "NIFTY" is never what actually ends
+  // up in the watchlist table, "^NSEI" is.
+  const watchedSymbols = useMemo(
+    () => new Set(watchlist.map((w) => w.symbol)),
+    [watchlist]
+  );
+
+  async function handleAddFromMarket(symbol: string, type: WatchlistType) {
+    await api.addToWatchlist(symbol, type);
+    await fetchWatchlist();
+  }
+
   const india = market.filter((m) => m.category === "india");
   const global_ = market.filter((m) => m.category === "global");
   const crypto = market.filter((m) => m.category === "crypto").slice(0, 6);
@@ -108,28 +121,56 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {india.length > 0 && (
           <>
             <SectionLabel label="India" />
-            {india.map((m) => <PriceRow key={m.symbol} item={m} />)}
+            {india.map((m) => (
+              <PriceRow
+                key={m.symbol}
+                item={m}
+                alreadyWatched={!!m.watchlist_symbol && watchedSymbols.has(m.watchlist_symbol)}
+                onAdd={handleAddFromMarket}
+              />
+            ))}
           </>
         )}
 
         {global_.length > 0 && (
           <>
             <SectionLabel label="Global" />
-            {global_.map((m) => <PriceRow key={m.symbol} item={m} />)}
+            {global_.map((m) => (
+              <PriceRow
+                key={m.symbol}
+                item={m}
+                alreadyWatched={!!m.watchlist_symbol && watchedSymbols.has(m.watchlist_symbol)}
+                onAdd={handleAddFromMarket}
+              />
+            ))}
           </>
         )}
 
         {crypto.length > 0 && (
           <>
             <SectionLabel label="Crypto" />
-            {crypto.map((m) => <PriceRow key={m.symbol} item={m} />)}
+            {crypto.map((m) => (
+              <PriceRow
+                key={m.symbol}
+                item={m}
+                alreadyWatched={!!m.watchlist_symbol && watchedSymbols.has(m.watchlist_symbol)}
+                onAdd={handleAddFromMarket}
+              />
+            ))}
           </>
         )}
 
         {forex.length > 0 && (
           <>
             <SectionLabel label="Forex" />
-            {forex.map((m) => <PriceRow key={m.symbol} item={m} />)}
+            {forex.map((m) => (
+              <PriceRow
+                key={m.symbol}
+                item={m}
+                alreadyWatched={!!m.watchlist_symbol && watchedSymbols.has(m.watchlist_symbol)}
+                onAdd={handleAddFromMarket}
+              />
+            ))}
           </>
         )}
 

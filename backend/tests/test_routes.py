@@ -39,6 +39,24 @@ def test_get_market_revalidates_before_reading():
         client.get("/market")
     refresh.assert_called_once()
 
+def test_get_market_enriches_rows_with_a_watchlist_target():
+    """A market row's display symbol ("NIFTY") isn't Yahoo-fetchable on its
+    own — the client needs the real ticker to add it to the watchlist."""
+    mock_data = [{"symbol": "NIFTY", "price": 24832.0, "change_pct": 1.2, "category": "india"}]
+    with patch("routes.market.refresh_market_if_stale"), \
+         patch("routes.market.get_market", return_value=mock_data):
+        data = client.get("/market").json()
+    assert data[0]["watchlist_symbol"] == "^NSEI"
+    assert data[0]["watchlist_type"] == "stock"
+
+def test_get_market_reports_null_target_for_an_unmappable_row():
+    mock_data = [{"symbol": "MADEUP", "price": 1.0, "change_pct": 0.0, "category": "india"}]
+    with patch("routes.market.refresh_market_if_stale"), \
+         patch("routes.market.get_market", return_value=mock_data):
+        data = client.get("/market").json()
+    assert data[0]["watchlist_symbol"] is None
+    assert data[0]["watchlist_type"] is None
+
 def test_get_news_by_category():
     mock_data = [{"title": "Test", "url": "http://x.com", "source": "ET", "category": "trading", "published_at": None}]
     with patch("routes.news.refresh_news_if_stale"), \

@@ -25,6 +25,49 @@ GLOBAL_SYMBOLS = {
     "GOLD": "GC=F",
     "OIL": "CL=F",
 }
+# CoinGecko's display symbol -> the Yahoo ticker the watchlist pipeline can
+# actually fetch. Needed because market_cache stores CoinGecko's bare symbol
+# ("BTC"), which Yahoo's chart API does not resolve on its own — it needs
+# the "-USD" suffix. Covers exactly the coins CRYPTO_IDS fetches.
+CRYPTO_SYMBOLS = {
+    "BTC": "BTC-USD",
+    "ETH": "ETH-USD",
+    "SOL": "SOL-USD",
+    "BNB": "BNB-USD",
+    "XRP": "XRP-USD",
+    "ADA": "ADA-USD",
+    "DOT": "DOT-USD",
+    "DOGE": "DOGE-USD",
+    "AVAX": "AVAX-USD",
+    "LINK": "LINK-USD",
+}
+
+# category -> (display->yahoo mapping, the WatchlistType to add it as).
+# india and global both use Yahoo index/futures tickers, which the pipeline
+# treats the same as any other stock-type symbol.
+_WATCHLIST_TARGETS = {
+    "india": (INDIA_SYMBOLS, "stock"),
+    "global": (GLOBAL_SYMBOLS, "stock"),
+    "forex": (FOREX_PAIRS, "forex"),
+    "crypto": (CRYPTO_SYMBOLS, "crypto"),
+}
+
+
+def watchlist_target(symbol: str, category: str) -> tuple[str, str] | None:
+    """The (yahoo_symbol, watchlist_type) to add for a market_cache row, or
+    None if this symbol can't be added directly (unknown category, or a
+    display symbol market_cache doesn't actually populate for it).
+
+    Display symbols ("NIFTY", "BTC", "USD/INR") are not Yahoo-fetchable on
+    their own — adding them to the watchlist as-is would create a row that
+    can never be backfilled and would sit at "no data yet" forever.
+    """
+    entry = _WATCHLIST_TARGETS.get(category)
+    if not entry:
+        return None
+    mapping, watchlist_type = entry
+    yahoo_symbol = mapping.get(symbol)
+    return (yahoo_symbol, watchlist_type) if yahoo_symbol else None
 
 
 def _fetch_group(mapping: dict[str, str], category: str, price_digits: int) -> list[dict]:

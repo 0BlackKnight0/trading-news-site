@@ -5,6 +5,13 @@ export interface MarketPrice {
   price: number;
   change_pct: number;
   category: "india" | "crypto" | "forex" | "global";
+  // The symbol/type to submit to POST /watchlist for this row. Null when
+  // this display symbol isn't Yahoo-fetchable on its own (should not
+  // happen for the fixed set of rows this app populates, but the client
+  // must not offer "add" when it can't map — that would create a row
+  // that can never be backfilled).
+  watchlist_symbol: string | null;
+  watchlist_type: WatchlistType | null;
 }
 
 export interface NewsItem {

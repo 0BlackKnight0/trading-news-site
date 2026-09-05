@@ -55,3 +55,37 @@ def test_fetch_forex_returns_usd_inr():
         result = fetch_forex()
     symbols = [r["symbol"] for r in result]
     assert "USD/INR" in symbols
+
+
+# --- watchlist_target ---------------------------------------------------
+
+from aggregator.market import watchlist_target
+
+
+def test_watchlist_target_maps_india_display_symbols_to_stock():
+    assert watchlist_target("NIFTY", "india") == ("^NSEI", "stock")
+    assert watchlist_target("SENSEX", "india") == ("^BSESN", "stock")
+
+
+def test_watchlist_target_maps_global_display_symbols_to_stock():
+    assert watchlist_target("S&P 500", "global") == ("^GSPC", "stock")
+    assert watchlist_target("GOLD", "global") == ("GC=F", "stock")
+
+
+def test_watchlist_target_maps_forex_display_symbols_to_forex():
+    assert watchlist_target("USD/INR", "forex") == ("USDINR=X", "forex")
+
+
+def test_watchlist_target_maps_crypto_display_symbols_to_crypto():
+    assert watchlist_target("BTC", "crypto") == ("BTC-USD", "crypto")
+    assert watchlist_target("DOGE", "crypto") == ("DOGE-USD", "crypto")
+
+
+def test_watchlist_target_is_none_for_an_unknown_symbol_in_a_known_category():
+    """A symbol market_cache doesn't actually populate for that category —
+    defensive, should never happen with the current fetch lists."""
+    assert watchlist_target("MADEUP", "india") is None
+
+
+def test_watchlist_target_is_none_for_an_unknown_category():
+    assert watchlist_target("NIFTY", "made-up-category") is None
