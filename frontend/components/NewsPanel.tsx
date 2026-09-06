@@ -9,7 +9,7 @@ import { useInterval } from "@/hooks/useInterval";
 // forex/info) rather than inventing a new palette — a category still needs
 // to be tellable apart at a glance, but the app should read as one product.
 const CATEGORIES: { key: NewsCategory; label: string; color: string }[] = [
-  { key: "markets", label: "Markets", color: "var(--accent)" },
+  { key: "markets", label: "Markets", color: "var(--brand)" },
   { key: "commodities", label: "Gold & Oil", color: "var(--commodity)" },
   { key: "ai", label: "AI", color: "var(--ai)" },
   { key: "energy", label: "EV & Energy", color: "var(--positive)" },

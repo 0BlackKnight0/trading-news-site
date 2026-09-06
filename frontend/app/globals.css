@@ -22,7 +22,7 @@
   --color-text-muted: var(--text-muted);
   --color-invert-surface: var(--invert-surface);
   --color-invert-text: var(--invert-text);
-  --color-accent: var(--accent);
+  --color-accent: var(--brand);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
   --color-info: var(--info);
@@ -53,7 +53,7 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
+  --color-accent: var(--brand);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -92,7 +92,7 @@
   --invert-text: #ffffff;
   /* Accents keep the same brand hues as dark mode, deepened a step where
      they double as text so they still clear contrast on a light surface. */
-  --accent: #e14a1f;
+  --brand: #e14a1f;
   --positive: #15803d;
   --negative: #b91c1c;
   --info: #1d4ed8;
@@ -151,7 +151,7 @@
   --text-muted: #48453f;
   --invert-surface: #ffffff;
   --invert-text: #000000;
-  --accent: #ff5530;
+  --brand: #ff5530;
   --positive: #22c55e;
   --negative: #ef4444;
   --info: #3b82f6;
