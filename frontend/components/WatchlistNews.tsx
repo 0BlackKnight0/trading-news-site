@@ -19,16 +19,16 @@ function Article({ item, unseen }: { item: NewsItem; unseen: boolean }) {
       href={item.url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`block px-4 py-3 border-b border-[#151515] hover:bg-white/[0.02] transition-colors ${
-        unseen ? "bg-[#0e0e0e]" : ""
+      className={`block px-4 py-3 border-b border-border-subtle hover:bg-overlay-hover transition-colors ${
+        unseen ? "bg-surface-hover" : ""
       }`}
     >
-      <p className={`text-[12.5px] leading-snug ${unseen ? "text-white" : "text-[#8a8a8a]"}`}>
+      <p className={`text-[12.5px] leading-snug ${unseen ? "text-text-primary" : "text-text-secondary"}`}>
         {item.title}
       </p>
-      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-[#4a4a4a]">
+      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-text-muted">
         {item.symbol && (
-          <span className="text-[#ff5530] font-semibold">{item.symbol}</span>
+          <span className="text-accent font-semibold">{item.symbol}</span>
         )}
         <span>{item.source}</span>
         <span className="ml-auto">{timeAgo(item.published_at)}</span>
@@ -82,15 +82,15 @@ export function WatchlistNews() {
   return (
     <div>
       <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <span className="text-[10px] uppercase tracking-[0.12em] text-[#555]">
+        <span className="text-[10px] uppercase tracking-[0.12em] text-text-tertiary">
           Watchlist
         </span>
         {unread > 0 && (
           <>
-            <span className="text-[10px] text-[#ff5530]">{unread} new</span>
+            <span className="text-[10px] text-accent">{unread} new</span>
             <button
               onClick={catchUp}
-              className="ml-auto text-[10px] text-[#777] hover:text-white border border-[#1e1e1e] rounded-full px-2 py-0.5 transition-colors"
+              className="ml-auto text-[10px] text-text-tertiary hover:text-text-primary border border-border-default rounded-full px-2 py-0.5 transition-colors"
             >
               Mark read
             </button>
@@ -101,15 +101,15 @@ export function WatchlistNews() {
       {loading ? (
         <div className="p-4 space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-12 bg-[#111] rounded-xl animate-pulse" />
+            <div key={i} className="h-12 bg-surface-hover rounded-xl animate-pulse" />
           ))}
         </div>
       ) : failed ? (
-        <p className="text-center text-[12px] text-[#f59e0b] py-16">
+        <p className="text-center text-[12px] text-warning py-16">
           Could not reach the news feed. Showing nothing rather than something stale.
         </p>
       ) : items.length === 0 ? (
-        <p className="px-4 pb-4 text-[11px] text-[#3a3a3a]">
+        <p className="px-4 pb-4 text-[11px] text-text-muted">
           No recent news for your watchlist symbols.
         </p>
       ) : (

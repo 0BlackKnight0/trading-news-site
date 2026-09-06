@@ -9,12 +9,12 @@ import { useInterval } from "@/hooks/useInterval";
 // forex/info) rather than inventing a new palette — a category still needs
 // to be tellable apart at a glance, but the app should read as one product.
 const CATEGORIES: { key: NewsCategory; label: string; color: string }[] = [
-  { key: "markets", label: "Markets", color: "#ff5530" },
-  { key: "commodities", label: "Gold & Oil", color: "#d4a054" },
-  { key: "ai", label: "AI", color: "#5eb3b3" },
-  { key: "energy", label: "EV & Energy", color: "#22c55e" },
-  { key: "crypto", label: "Crypto", color: "#f59e0b" },
-  { key: "geopolitics", label: "Politics", color: "#3b82f6" },
+  { key: "markets", label: "Markets", color: "var(--accent)" },
+  { key: "commodities", label: "Gold & Oil", color: "var(--commodity)" },
+  { key: "ai", label: "AI", color: "var(--ai)" },
+  { key: "energy", label: "EV & Energy", color: "var(--positive)" },
+  { key: "crypto", label: "Crypto", color: "var(--warning)" },
+  { key: "geopolitics", label: "Politics", color: "var(--info)" },
 ];
 
 function categoryMeta(key: NewsCategory | null) {
@@ -38,32 +38,32 @@ function NewsCard({ item }: { item: NewsItem }) {
       target="_blank"
       rel="noopener noreferrer"
       style={{ borderLeftColor: color }}
-      className="group flex flex-col bg-[#101010] border border-[#1c1c1c] border-l-[3px] rounded-2xl p-4 hover:border-[#2a2a2a] hover:bg-[#131313] transition-colors"
+      className="group flex flex-col bg-surface border border-border-default border-l-[3px] rounded-2xl p-4 hover:border-border-strong hover:bg-surface-hover transition-colors"
     >
       <div className="flex items-center gap-1.5 mb-2">
         <span
           className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-          style={{ color, backgroundColor: `${color}1a` }}
+          style={{ color, backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)` }}
         >
           {label}
         </span>
         {item.symbol && (
-          <span className="text-[10px] text-[#666] font-medium">{item.symbol}</span>
+          <span className="text-[10px] text-text-tertiary font-medium">{item.symbol}</span>
         )}
       </div>
 
-      <p className="text-[13px] font-medium leading-snug text-[#d8d8d8] group-hover:text-white transition-colors line-clamp-3">
+      <p className="text-[13px] font-medium leading-snug text-text-secondary group-hover:text-text-primary transition-colors line-clamp-3">
         {item.title}
       </p>
 
       {item.summary && (
-        <p className="text-[11px] text-[#5c5c5c] mt-1.5 leading-relaxed line-clamp-2">
+        <p className="text-[11px] text-text-muted mt-1.5 leading-relaxed line-clamp-2">
           {item.summary}
         </p>
       )}
 
-      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[#181818] text-[10px] text-[#4a4a4a]">
-        <span className="font-medium text-[#666]">{item.source}</span>
+      <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border-subtle text-[10px] text-text-muted">
+        <span className="font-medium text-text-tertiary">{item.source}</span>
         <span className="ml-auto">{timeAgo(item.published_at)}</span>
       </div>
     </a>
@@ -99,7 +99,7 @@ export function NewsPanel() {
   return (
     <div className="p-4">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-[10px] uppercase tracking-[0.12em] text-[#555]">
+        <span className="text-[10px] uppercase tracking-[0.12em] text-text-tertiary">
           Market intelligence
         </span>
       </div>
@@ -114,11 +114,11 @@ export function NewsPanel() {
               className={
                 active
                   ? "text-[10px] px-2.5 py-1 rounded-full border font-semibold transition-colors"
-                  : "text-[10px] px-2.5 py-1 rounded-full border font-medium transition-colors bg-transparent text-[#555] border-[#1e1e1e] hover:text-[#888]"
+                  : "text-[10px] px-2.5 py-1 rounded-full border font-medium transition-colors bg-transparent text-text-tertiary border-border-default hover:text-text-secondary"
               }
               style={
                 active
-                  ? { color: c.color, backgroundColor: `${c.color}1a`, borderColor: `${c.color}66` }
+                  ? { color: c.color, backgroundColor: `color-mix(in srgb, ${c.color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${c.color} 40%, transparent)` }
                   : undefined
               }
             >
@@ -131,15 +131,15 @@ export function NewsPanel() {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-32 bg-[#111] rounded-2xl animate-pulse" />
+            <div key={i} className="h-32 bg-surface-hover rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : failed ? (
-        <p className="text-center text-[12px] text-[#f59e0b] py-16">
+        <p className="text-center text-[12px] text-warning py-16">
           Could not reach the news feed. Showing nothing rather than something stale.
         </p>
       ) : items.length === 0 ? (
-        <p className="text-[11px] text-[#3a3a3a] py-4">Nothing here yet.</p>
+        <p className="text-[11px] text-text-muted py-4">Nothing here yet.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {items.map((item) => (

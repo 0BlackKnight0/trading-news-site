@@ -7,10 +7,10 @@ import { PriceRow } from "./PriceRow";
 import { WatchlistManager } from "./WatchlistManager";
 
 const SECTION_DOTS: Record<string, string> = {
-  India: "bg-[#ff5530]",
-  Global: "bg-[#a855f7]",
-  Crypto: "bg-[#f59e0b]",
-  Forex: "bg-[#3b82f6]",
+  India: "bg-accent",
+  Global: "bg-ai",
+  Crypto: "bg-warning",
+  Forex: "bg-info",
 };
 
 function SectionLabel({ label }: { label: string }) {
@@ -18,7 +18,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 mt-5 mb-1 px-3">
       {dot && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
-      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#555]">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary">
         {label}
       </span>
     </div>
@@ -131,19 +131,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     <aside className={`
       fixed inset-y-0 left-0 z-40 md:relative md:z-auto md:inset-auto
       w-[260px] md:w-[220px] shrink-0
-      bg-[#0d0d0d] border-r border-[#1c1c1c]
+      bg-surface border-r border-border-default
       h-screen overflow-hidden flex flex-col
       transition-transform duration-300 ease-in-out
       ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
     `}>
-      <div className="px-3 pt-5 pb-3 border-b border-[#1c1c1c]">
+      <div className="px-3 pt-5 pb-3 border-b border-border-default">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full animate-pulse" />
+            <div className="w-1.5 h-1.5 bg-positive rounded-full animate-pulse" />
           </div>
           <button
             onClick={onClose}
-            className="md:hidden text-[#444] hover:text-[#777] p-1 -mr-1 transition-colors"
+            className="md:hidden text-text-muted hover:text-text-tertiary p-1 -mr-1 transition-colors"
             aria-label="Close sidebar"
           >
             ✕
@@ -153,7 +153,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             15-minute TTL — and on Hobby the cron runs once a day. Claiming
             "Live" was the exact dishonesty this rebuild set out to remove;
             each row states its own age instead. */}
-        <p className="text-[10px] text-[#555] mt-0.5 ml-3.5">Delayed · cached up to 15 min</p>
+        <p className="text-[10px] text-text-tertiary mt-0.5 ml-3.5">Delayed · cached up to 15 min</p>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2 overscroll-contain">
@@ -213,7 +213,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </>
         )}
 
-        <div className="mt-4 border-t border-[#1c1c1c] pt-3">
+        <div className="mt-4 border-t border-border-default pt-3">
           <WatchlistManager
             items={visibleWatchlist}
             onUpdate={fetchWatchlist}

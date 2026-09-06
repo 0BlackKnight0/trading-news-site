@@ -9,11 +9,11 @@ export function Divider({ lastSeenAt }: { lastSeenAt: string }) {
 
   return (
     <div className="flex items-center gap-3 px-4 py-3" role="separator">
-      <div className="h-px flex-1 bg-[#ff5530]/25" />
-      <span className="text-[10px] uppercase tracking-[0.12em] text-[#ff5530]/70 shrink-0">
+      <div className="h-px flex-1 bg-accent/25" />
+      <span className="text-[10px] uppercase tracking-[0.12em] text-accent/70 shrink-0">
         {label} — your last visit
       </span>
-      <div className="h-px flex-1 bg-[#ff5530]/25" />
+      <div className="h-px flex-1 bg-accent/25" />
     </div>
   );
 }

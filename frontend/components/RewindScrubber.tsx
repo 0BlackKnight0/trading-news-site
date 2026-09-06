@@ -70,21 +70,21 @@ export function RewindScrubber({ symbol }: Props) {
   }, [visible]);
 
   if (loading) {
-    return <div className="h-24 bg-[#161616] border border-[#1e1e1e] rounded-xl animate-pulse" />;
+    return <div className="h-24 bg-surface border border-border-default rounded-xl animate-pulse" />;
   }
 
   if (failed) {
     return (
-      <div className="bg-[#161616] border border-[#1e1e1e] rounded-xl p-3">
-        <p className="text-[11px] text-[#f59e0b]">Couldn&apos;t load history for {symbol}.</p>
+      <div className="bg-surface border border-border-default rounded-xl p-3">
+        <p className="text-[11px] text-warning">Couldn&apos;t load history for {symbol}.</p>
       </div>
     );
   }
 
   if (bars.length < 2) {
     return (
-      <div className="bg-[#161616] border border-[#1e1e1e] rounded-xl p-3">
-        <p className="text-[11px] text-[#444]">Not enough history yet to rewind {symbol}.</p>
+      <div className="bg-surface border border-border-default rounded-xl p-3">
+        <p className="text-[11px] text-text-muted">Not enough history yet to rewind {symbol}.</p>
       </div>
     );
   }
@@ -92,10 +92,10 @@ export function RewindScrubber({ symbol }: Props) {
   const current = bars[index];
 
   return (
-    <div className="bg-[#161616] border border-[#1e1e1e] rounded-xl p-3">
+    <div className="bg-surface border border-border-default rounded-xl p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-[#555] uppercase tracking-wider">Rewind</span>
-        <span className="text-[11px] text-[#888] tabular-nums">
+        <span className="text-[10px] text-text-tertiary uppercase tracking-wider">Rewind</span>
+        <span className="text-[11px] text-text-secondary tabular-nums">
           {new Date(current.ts).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
           {" · "}
           {current.close.toLocaleString("en-US", { maximumFractionDigits: 2 })}
@@ -105,9 +105,9 @@ export function RewindScrubber({ symbol }: Props) {
       <svg viewBox={`0 0 100 ${CHART_HEIGHT}`} preserveAspectRatio="none" className="w-full h-16">
         {/* The last-visit marker: bars[0] IS last_seen_at, since the range
             always starts there — so it always sits at the chart's left edge. */}
-        <line x1={0.5} y1={0} x2={0.5} y2={CHART_HEIGHT} stroke="#3a3a3a" strokeDasharray="2,2" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line x1={0.5} y1={0} x2={0.5} y2={CHART_HEIGHT} style={{ stroke: "var(--text-muted)" }} strokeDasharray="2,2" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {points && (
-          <polyline points={points} fill="none" stroke="#22c55e" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          <polyline points={points} fill="none" style={{ stroke: "var(--positive)" }} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
         )}
       </svg>
 
@@ -117,7 +117,7 @@ export function RewindScrubber({ symbol }: Props) {
             if (!playing && index >= bars.length - 1) setIndex(0);
             setPlaying((p) => !p);
           }}
-          className="text-[11px] text-[#888] hover:text-white transition-colors w-5 text-center shrink-0"
+          className="text-[11px] text-text-secondary hover:text-text-primary transition-colors w-5 text-center shrink-0"
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? "⏸" : "▶"}
@@ -128,11 +128,11 @@ export function RewindScrubber({ symbol }: Props) {
           max={bars.length - 1}
           value={index}
           onChange={(e) => { setPlaying(false); setIndex(Number(e.target.value)); }}
-          className="flex-1 accent-[#22c55e]"
+          className="flex-1 accent-positive"
         />
       </div>
       {lastSeenAt && (
-        <p className="text-[9px] text-[#3a3a3a] mt-1">
+        <p className="text-[9px] text-text-muted mt-1">
           Since your last visit — {new Date(lastSeenAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
         </p>
       )}

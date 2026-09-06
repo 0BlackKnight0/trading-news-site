@@ -5,6 +5,7 @@ import { useInterval } from "@/hooks/useInterval";
 import { Feed } from "./Feed";
 import { NewsPanel } from "./NewsPanel";
 import { WatchlistNews } from "./WatchlistNews";
+import { ThemeToggle } from "./ThemeToggle";
 
 type Tab = "watchlist" | "news" | "changes";
 
@@ -32,11 +33,11 @@ export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
   ];
 
   return (
-    <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a]">
-      <header className="px-4 md:px-6 py-4 border-b border-[#191919] flex items-center gap-3">
+    <main className="flex-1 flex flex-col overflow-hidden bg-app">
+      <header className="px-4 md:px-6 py-4 border-b border-border-subtle flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
-          className="md:hidden flex flex-col gap-[5px] p-1 -ml-1 text-[#555] hover:text-[#888] transition-colors"
+          className="md:hidden flex flex-col gap-[5px] p-1 -ml-1 text-text-tertiary hover:text-text-secondary transition-colors"
           aria-label="Toggle market sidebar"
         >
           <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
@@ -52,17 +53,20 @@ export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
               onClick={() => setTab(key)}
               className={`text-[12px] px-3 py-1 rounded-full transition-colors capitalize ${
                 tab === key
-                  ? "bg-white/10 text-white font-semibold"
-                  : "text-[#666] hover:text-[#aaa]"
+                  ? "bg-text-primary/10 text-text-primary font-semibold"
+                  : "text-text-tertiary hover:text-text-secondary"
               }`}
             >
               {label}
               {unread > 0 && (
-                <span className="ml-1.5 text-[10px] text-[#ff5530]">{unread}</span>
+                <span className="ml-1.5 text-[10px] text-accent">{unread}</span>
               )}
             </button>
           ))}
         </nav>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto">

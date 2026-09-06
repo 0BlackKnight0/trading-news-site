@@ -1,9 +1,9 @@
 import { FeedEvent } from "@/types";
 
 const SEVERITY_DOT: Record<number, string> = {
-  1: "bg-[#3a3a3a]",
-  2: "bg-[#f59e0b]",
-  3: "bg-[#ff5530]",
+  1: "bg-text-muted",
+  2: "bg-warning",
+  3: "bg-accent",
 };
 
 function num(value: unknown): number {
@@ -60,8 +60,8 @@ export function EventRow({ event, unseen }: { event: FeedEvent; unseen: boolean 
 
   return (
     <article
-      className={`flex gap-3 px-4 py-3.5 border-b border-[#151515] transition-colors ${
-        unseen ? "bg-[#0e0e0e]" : ""
+      className={`flex gap-3 px-4 py-3.5 border-b border-border-subtle transition-colors ${
+        unseen ? "bg-surface-hover" : ""
       }`}
     >
       <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-2 ${SEVERITY_DOT[event.severity]}`} />
@@ -69,21 +69,21 @@ export function EventRow({ event, unseen }: { event: FeedEvent; unseen: boolean 
         <div className="flex items-baseline justify-between gap-3">
           <span
             className={`text-[12px] font-semibold tracking-tight ${
-              unseen ? "text-white" : "text-[#8a8a8a]"
+              unseen ? "text-text-primary" : "text-text-secondary"
             }`}
           >
             {event.symbol}
           </span>
-          <time className="text-[10px] text-[#3d3d3d] shrink-0">{time}</time>
+          <time className="text-[10px] text-text-muted shrink-0">{time}</time>
         </div>
-        <p className={`text-[12px] mt-0.5 ${unseen ? "text-[#c8c8c8]" : "text-[#5e5e5e]"}`}>
+        <p className={`text-[12px] mt-0.5 ${unseen ? "text-text-secondary" : "text-text-tertiary"}`}>
           {narrate(event)}
         </p>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {chips(event).map((chip) => (
             <span
               key={chip}
-              className="text-[10px] text-[#6a6a6a] bg-[#141414] border border-[#1e1e1e] rounded-full px-2 py-0.5 tabular-nums"
+              className="text-[10px] text-text-tertiary bg-surface border border-border-default rounded-full px-2 py-0.5 tabular-nums"
             >
               {chip}
             </span>

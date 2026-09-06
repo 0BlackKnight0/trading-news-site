@@ -116,8 +116,8 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
   return (
     <div>
       <div className="flex items-center gap-2 mb-2 px-3">
-        <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] shrink-0" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#555]">
+        <div className="w-1.5 h-1.5 rounded-full bg-positive shrink-0" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary">
           Watchlist
         </span>
       </div>
@@ -126,27 +126,27 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
         <div
           key={item.id}
           onClick={() => setSelected({ symbol: item.symbol, type: item.type })}
-          className="flex items-center justify-between py-1.5 px-3 group hover:bg-white/[0.03] cursor-pointer transition-colors"
+          className="flex items-center justify-between py-1.5 px-3 group hover:bg-overlay-hover cursor-pointer transition-colors"
         >
           <div className="min-w-0">
-            <span className="text-[11px] font-medium text-[#888] group-hover:text-[#ccc] transition-colors">
+            <span className="text-[11px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">
               {item.symbol}
             </span>
             {/* Age is always stated. A price with no timestamp is a lie. */}
-            <span className="block text-[9px] text-[#3a3a3a]">{ageLabel(item.as_of)}</span>
+            <span className="block text-[9px] text-text-muted">{ageLabel(item.as_of)}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {item.price === null ? (
-              <span className="text-[10px] text-[#3a3a3a]">—</span>
+              <span className="text-[10px] text-text-muted">—</span>
             ) : (
               <div className="text-right">
-                <div className="text-[11px] font-semibold text-[#e0e0e0] tabular-nums leading-none">
+                <div className="text-[11px] font-semibold text-text-primary tabular-nums leading-none">
                   {item.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                 </div>
                 {item.change_pct !== null && (
                   <div
                     className={`text-[9px] tabular-nums mt-0.5 ${
-                      item.change_pct >= 0 ? "text-[#22c55e]" : "text-[#ef4444]"
+                      item.change_pct >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >
                     {item.change_pct >= 0 ? "▲" : "▼"} {Math.abs(item.change_pct).toFixed(2)}%
@@ -156,7 +156,7 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
             )}
             <button
               onClick={(e) => handleRemove(item.symbol, e)}
-              className="text-[#2a2a2a] hover:text-[#ef4444] opacity-0 group-hover:opacity-100 transition-all text-[10px]"
+              className="text-text-muted hover:text-negative opacity-0 group-hover:opacity-100 transition-all text-[10px]"
             >
               ✕
             </button>
@@ -177,10 +177,10 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
             }}
             onFocus={() => { if (suggestions.length > 0) setShowDropdown(true); }}
             placeholder="Add ticker (e.g. RELIANCE)"
-            className="h-7 text-[11px] bg-[#161616] border-[#2a2a2a] text-[#aaa] placeholder:text-[#333] rounded-lg pr-6"
+            className="h-7 text-[11px] bg-surface border-border-strong text-text-secondary placeholder:text-text-muted rounded-lg pr-6"
           />
           {searching && (
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#444]">
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-text-muted">
               ···
             </span>
           )}
@@ -188,24 +188,24 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
           {showDropdown && suggestions.length > 0 && (
             <div
               ref={dropdownRef}
-              className="absolute left-0 right-0 top-full mt-1 bg-[#131313] border border-[#252525] rounded-xl overflow-hidden z-40 shadow-xl"
+              className="absolute left-0 right-0 top-full mt-1 bg-surface border border-border-default rounded-xl overflow-hidden z-40 shadow-xl"
             >
               {suggestions.map((s) => (
                 <button
                   key={s.symbol}
                   onClick={() => selectSuggestion(s)}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/[0.04] transition-colors text-left"
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-overlay-hover transition-colors text-left"
                 >
                   <div className="min-w-0">
-                    <span className="text-[12px] font-semibold text-[#d0d0d0]">{s.symbol}</span>
-                    <span className="text-[10px] text-[#555] ml-1.5 truncate">{s.name}</span>
+                    <span className="text-[12px] font-semibold text-text-primary">{s.symbol}</span>
+                    <span className="text-[10px] text-text-tertiary ml-1.5 truncate">{s.name}</span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span className="text-[9px] text-[#444]">{s.exchange}</span>
+                    <span className="text-[9px] text-text-muted">{s.exchange}</span>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                      s.type === "stock" ? "bg-[#ff5530]/10 text-[#ff5530]" :
-                      s.type === "crypto" ? "bg-[#f59e0b]/10 text-[#f59e0b]" :
-                      "bg-[#3b82f6]/10 text-[#3b82f6]"
+                      s.type === "stock" ? "bg-accent/10 text-accent" :
+                      s.type === "crypto" ? "bg-warning/10 text-warning" :
+                      "bg-info/10 text-info"
                     }`}>
                       {s.type}
                     </span>
@@ -223,8 +223,8 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
               onClick={() => setType(t)}
               className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
                 type === t
-                  ? "bg-white text-black font-semibold"
-                  : "bg-[#1a1a1a] text-[#555] hover:text-[#888] border border-[#2a2a2a]"
+                  ? "bg-invert-surface text-invert-text font-semibold"
+                  : "bg-surface text-text-tertiary hover:text-text-secondary border border-border-strong"
               }`}
             >
               {t}
@@ -235,7 +235,7 @@ export function WatchlistManager({ items, onUpdate, onRemoveStart, onRemoveFaile
         <Button
           onClick={handleAdd}
           disabled={loading || !symbol.trim()}
-          className="w-full h-7 text-[11px] bg-white text-black hover:bg-[#e0e0e0] rounded-full font-semibold"
+          className="w-full h-7 text-[11px] bg-invert-surface text-invert-text hover:opacity-90 rounded-full font-semibold"
         >
           {loading ? "Adding..." : "Add"}
         </Button>

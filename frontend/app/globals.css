@@ -5,6 +5,31 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Since's own semantic palette — used by every component via plain
+     Tailwind utilities (bg-app, text-secondary, border-subtle, ...). Each
+     resolves through the CSS variables below, which flip with the `.dark`
+     class, so no component needs its own light/dark branching. */
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-overlay-hover: var(--overlay-hover);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-muted: var(--text-muted);
+  --color-invert-surface: var(--invert-surface);
+  --color-invert-text: var(--invert-text);
+  --color-accent: var(--accent);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-ai: var(--ai);
+  --color-commodity: var(--commodity);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -49,6 +74,32 @@
 }
 
 :root {
+  /* Light theme. Warm off-white rather than pure white, keeping the same
+     warm-neutral gray family the dark theme uses — see redesign notes on
+     avoiding a hue mismatch between the two modes. */
+  --app: #f6f5f2;
+  --surface: #ffffff;
+  --surface-hover: #f0efeb;
+  --overlay-hover: rgba(0, 0, 0, 0.035);
+  --border-subtle: #ecebe7;
+  --border-default: #e2e0da;
+  --border-strong: #d1cec5;
+  --text-primary: #18160f;
+  --text-secondary: #5c5952;
+  --text-tertiary: #847f76;
+  --text-muted: #a8a49a;
+  --invert-surface: #18160f;
+  --invert-text: #ffffff;
+  /* Accents keep the same brand hues as dark mode, deepened a step where
+     they double as text so they still clear contrast on a light surface. */
+  --accent: #e14a1f;
+  --positive: #15803d;
+  --negative: #b91c1c;
+  --info: #1d4ed8;
+  --warning: #a16207;
+  --ai: #0f766e;
+  --commodity: #92651a;
+
   --background: #0f1117;
   --foreground: #e0e0e0;
   --card: oklch(1 0 0);
@@ -84,6 +135,30 @@
 }
 
 .dark {
+  /* Dark theme — the app's original, unchanged look. Values are the
+     consolidated form of what used to be ~48 one-off hex literals spread
+     across components. */
+  --app: #0a0a0a;
+  --surface: #101010;
+  --surface-hover: #161616;
+  --overlay-hover: rgba(255, 255, 255, 0.035);
+  --border-subtle: #161616;
+  --border-default: #1e1e1e;
+  --border-strong: #2e2e2e;
+  --text-primary: #e7e5e1;
+  --text-secondary: #9c9992;
+  --text-tertiary: #6b6862;
+  --text-muted: #48453f;
+  --invert-surface: #ffffff;
+  --invert-text: #000000;
+  --accent: #ff5530;
+  --positive: #22c55e;
+  --negative: #ef4444;
+  --info: #3b82f6;
+  --warning: #f59e0b;
+  --ai: #5eb3b3;
+  --commodity: #d4a054;
+
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
