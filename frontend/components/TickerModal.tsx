@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { TickerDetail, WatchlistType } from "@/types";
 import { api } from "@/lib/api";
+import { RewindScrubber } from "./RewindScrubber";
 
 interface Props {
   symbol: string;
@@ -119,6 +120,8 @@ export function TickerModal({ symbol, type, onClose }: Props) {
                   </span>
                 </div>
               </div>
+
+              <RewindScrubber symbol={symbol} />
 
               {/* Stats grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">

@@ -97,3 +97,14 @@ export interface FeedResponse {
   last_seen_at: string;
   next_cursor: string | null;
 }
+
+export interface HistoryBar {
+  ts: string;
+  close: number;
+}
+
+export interface HistoryResponse {
+  symbol: string;
+  last_seen_at: string;
+  bars: HistoryBar[];
+}

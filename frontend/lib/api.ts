@@ -1,5 +1,5 @@
 // frontend/lib/api.ts
-import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType, SearchResult, TickerDetail, SymbolNewsResponse } from "@/types";
+import { MarketPrice, NewsItem, WatchlistItem, NewsCategory, WatchlistType, SearchResult, TickerDetail, SymbolNewsResponse, HistoryResponse } from "@/types";
 import { getDeviceKey } from "@/lib/deviceKey";
 import { FeedResponse } from "@/types";
 
@@ -43,4 +43,6 @@ export const api = {
   getSymbolNews: () => fetchJSON<SymbolNewsResponse>("/news/symbols"),
   markNewsSeen: () =>
     fetchJSON<{ news_last_seen_at: string }>("/news/seen", { method: "POST" }),
+  getHistory: (symbol: string) =>
+    fetchJSON<HistoryResponse>(`/history?symbol=${encodeURIComponent(symbol)}`),
 };
