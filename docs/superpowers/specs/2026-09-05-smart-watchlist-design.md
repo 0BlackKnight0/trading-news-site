@@ -20,8 +20,9 @@ The product is named **Since**.
 Two concepts ship in sequence:
 
 - **The Line** (Phase 1) — an append-only event log with an unread divider.
-- **Rewind** (Phase 2) — a time scrubber that replays the board from the user's
-  last visit to now, on the same snapshot data.
+- **Rewind** (Phase 2) — a time scrubber, scoped to **one symbol at a time**, that
+  replays that symbol's own chart from the user's last visit to now, on the same
+  snapshot data.
 
 A third concept — a weighted composite "Signal Score" with suppression and an
 attention budget — was explored and deliberately **deferred as too complex for the
@@ -275,7 +276,7 @@ unauthenticated — any visitor can add or delete any symbol.
 | --- | --- |
 | `GET /feed?limit=&cursor=&since=` | Events newest-first, with `unread_count` and `last_seen_at`. `cursor` paginates (opaque, encodes `occurred_at` **and `id`**); `since` optionally overrides the divider baseline, defaulting to the caller's `last_seen_at` |
 | `POST /feed/seen` | Sets `last_seen_at = now()` — the "catch up" action |
-| `GET /history?symbols=&from=&to=` | Snapshot series for sparklines and the scrubber |
+| `GET /history?symbol=&from=&to=` | Snapshot series for one symbol's sparkline and its scrubber |
 | `GET /watchlist` `POST` `DELETE` | Now user-scoped |
 | `PATCH /watchlist/{symbol}` | Pin, mute, per-symbol threshold |
 | `GET /ticker/{symbol}` | Retained; dead cells and the currency bug fixed (§11) |
@@ -385,9 +386,20 @@ Each phase is independently shippable.
 7. Priced watchlist sidebar; staleness badges; market-status chip
 
 **Phase 2 — Rewind**
-8. `GET /history`
-9. Scrubber component with animated replay
-10. `┊` last-visit marker on every sparkline
+
+Scoped to one symbol at a time, not the whole board. Selecting a symbol (its
+watchlist row or drawer) reveals a scrubber under that symbol's own sparkline;
+everything else in the sidebar keeps showing current prices, untouched. Dragging
+the handle re-renders only that symbol's chart and its own events between
+`last_seen_at` and now, from `GET /history?symbol=&from=&to=`; play steps forward
+one day at a time. This is deliberately narrower than an earlier "replay the
+whole board in sync" version — that needed a page-level clock driving every
+sparkline and the sidebar at once; scoped to one symbol it is local state owned
+by a single component, with no cross-component synchronization to build.
+
+8. `GET /history?symbol=&from=&to=` — one symbol's snapshot range
+9. Per-symbol scrubber component (local state, animated play/pause)
+10. `┊` last-visit marker on that symbol's sparkline
 
 **Phase 3 — Delivery and control**
 11. Telegram digest composed from unseen events, MarkdownV2-escaped
