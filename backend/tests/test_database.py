@@ -240,3 +240,50 @@ def test_get_news_ranks_by_score_then_recency():
     second = chain.order.return_value.order.call_args_list[0]
     assert first[0][0] == "score" and first[1]["desc"] is True
     assert second[0][0] == "published_at" and second[1]["nullsfirst"] is False
+
+
+def test_get_snapshot_range_returns_bars_as_ts_close_dicts():
+    rows = [
+        {"ts": "2026-01-01T00:00:00+00:00", "close": 1},
+        {"ts": "2026-01-02T00:00:00+00:00", "close": 2},
+    ]
+    with patch("database.get_client") as client:
+        chain = (client.return_value.table.return_value.select.return_value
+                  .eq.return_value.gte.return_value.lte.return_value)
+        chain.order.return_value.execute.return_value = MagicMock(data=rows)
+        bars = database.get_snapshot_range(
+            "X", "2026-01-01T00:00:00+00:00", "2026-01-02T23:59:59+00:00")
+    assert bars == [
+        {"ts": "2026-01-01T00:00:00+00:00", "close": 1.0},
+        {"ts": "2026-01-02T00:00:00+00:00", "close": 2.0},
+    ]
+
+
+def test_get_snapshot_range_queries_the_given_symbol_and_window_ascending():
+    table = MagicMock()
+    with patch("database.get_client") as client:
+        client.return_value.table.return_value = table
+        chain = table.select.return_value.eq.return_value.gte.return_value.lte.return_value
+        chain.order.return_value.execute.return_value = MagicMock(data=[])
+        database.get_snapshot_range(
+            "RELIANCE.NS", "2026-01-01T00:00:00+00:00", "2026-01-05T00:00:00+00:00")
+    table.select.return_value.eq.assert_called_once_with("symbol", "RELIANCE.NS")
+    table.select.return_value.eq.return_value.gte.assert_called_once_with(
+        "ts", "2026-01-01T00:00:00+00:00")
+    table.select.return_value.eq.return_value.gte.return_value.lte.assert_called_once_with(
+        "ts", "2026-01-05T00:00:00+00:00")
+    chain.order.assert_called_once_with("ts")
+
+
+def test_get_snapshot_range_skips_rows_with_no_close():
+    rows = [
+        {"ts": "2026-01-01T00:00:00+00:00", "close": None},
+        {"ts": "2026-01-02T00:00:00+00:00", "close": 3},
+    ]
+    with patch("database.get_client") as client:
+        chain = (client.return_value.table.return_value.select.return_value
+                  .eq.return_value.gte.return_value.lte.return_value)
+        chain.order.return_value.execute.return_value = MagicMock(data=rows)
+        bars = database.get_snapshot_range(
+            "X", "2026-01-01T00:00:00+00:00", "2026-01-02T00:00:00+00:00")
+    assert bars == [{"ts": "2026-01-02T00:00:00+00:00", "close": 3.0}]

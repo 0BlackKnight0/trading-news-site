@@ -180,6 +180,21 @@ def get_snapshots(symbol: str, limit: int = 260) -> list[Bar]:
     return bars
 
 
+def get_snapshot_range(symbol: str, from_ts: str, to_ts: str) -> list[dict]:
+    """Daily closes for one symbol between two timestamps, inclusive,
+    oldest-first. Feeds the Rewind scrubber's chart — unlike `get_snapshots`,
+    callers here only need a close price to plot, not a full OHLCV bar."""
+    res = (get_client().table("price_snapshots")
+           .select("ts, close")
+           .eq("symbol", symbol)
+           .gte("ts", from_ts)
+           .lte("ts", to_ts)
+           .order("ts")
+           .execute())
+    return [{"ts": r["ts"], "close": float(r["close"])}
+            for r in (res.data or []) if r.get("close") is not None]
+
+
 def upsert_symbol_stats(symbol: str, stats: SymbolStats) -> None:
     get_client().table("symbol_stats").upsert({
         "symbol": symbol,
