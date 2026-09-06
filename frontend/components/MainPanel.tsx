@@ -4,21 +4,32 @@ import { api } from "@/lib/api";
 import { useInterval } from "@/hooks/useInterval";
 import { Feed } from "./Feed";
 import { NewsPanel } from "./NewsPanel";
+import { WatchlistNews } from "./WatchlistNews";
 
-type Tab = "news" | "changes";
+type Tab = "watchlist" | "news" | "changes";
 
 export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [tab, setTab] = useState<Tab>("news");
   const [changesUnread, setChangesUnread] = useState(0);
+  const [watchlistUnread, setWatchlistUnread] = useState(0);
 
-  // The Changes badge has to stay live while the user is on News, otherwise a
-  // firing detector is invisible until they happen to switch tabs.
+  // Both badges have to stay live regardless of which tab is open, otherwise
+  // a firing detector or a fresh symbol article is invisible until the user
+  // happens to switch tabs.
   useEffect(() => {
     api.getFeed().then((d) => setChangesUnread(d.unread_count)).catch(() => {});
+    api.getSymbolNews().then((d) => setWatchlistUnread(d.unread_count)).catch(() => {});
   }, [tab]);
   useInterval(() => {
     api.getFeed().then((d) => setChangesUnread(d.unread_count)).catch(() => {});
+    api.getSymbolNews().then((d) => setWatchlistUnread(d.unread_count)).catch(() => {});
   }, 120_000);
+
+  const TABS: { key: Tab; label: string; unread: number }[] = [
+    { key: "watchlist", label: "watchlist", unread: watchlistUnread },
+    { key: "news", label: "news", unread: 0 },
+    { key: "changes", label: "changes", unread: changesUnread },
+  ];
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a]">
@@ -33,7 +44,7 @@ export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
           <span className="block w-[18px] h-[1.5px] bg-current rounded-full" />
         </button>
         <nav className="flex gap-1" role="tablist">
-          {(["news", "changes"] as const).map((key) => (
+          {TABS.map(({ key, label, unread }) => (
             <button
               key={key}
               role="tab"
@@ -45,9 +56,9 @@ export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
                   : "text-[#666] hover:text-[#aaa]"
               }`}
             >
-              {key}
-              {key === "changes" && changesUnread > 0 && (
-                <span className="ml-1.5 text-[10px] text-[#ff5530]">{changesUnread}</span>
+              {label}
+              {unread > 0 && (
+                <span className="ml-1.5 text-[10px] text-[#ff5530]">{unread}</span>
               )}
             </button>
           ))}
@@ -55,7 +66,7 @@ export function MainPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        {tab === "news" ? <NewsPanel /> : <Feed embedded />}
+        {tab === "watchlist" ? <WatchlistNews /> : tab === "news" ? <NewsPanel /> : <Feed embedded />}
       </div>
     </main>
   );
